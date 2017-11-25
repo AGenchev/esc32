@@ -1,5 +1,6 @@
-# code taken from esc32, reworked in gelemodxx branches. Hardware - included.
-Please, switch to gelemodxx branches if you want to watch my code. The main / trunk branch I will leave unmodified !!!
+# code taken from esc32, reworked in gelemodxx branches. 
+Hardware will be included. The main / trunk branch of Bill Nesbitt, I will leave unmodified !!!
+Please, switch to gelemodxx branches if you want to watch my code. 
 Automatically exported from code.google.com/p/esc32
 
 I plan to modify this and reform the project... The goal - to compile with FOSS tools completely and to contain all source.
