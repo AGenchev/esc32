@@ -41,6 +41,7 @@ extern void cliFuncBoot(void *cmd, char *cmdLine);
 extern void cliFuncConfig(void *cmd, char *cmdLine);
 extern void cliFuncDisarm(void *cmd, char *cmdLine);
 extern void cliFuncDuty(void *cmd, char *cmdLine);
+// static void clifetSelfTest(void *cmd, char *cmdLine);
 extern void cliFuncHelp(void *cmd, char *cmdLine);
 extern void cliFuncInput(void *cmd, char *cmdLine);
 extern void cliFuncMode(void *cmd, char *cmdLine);

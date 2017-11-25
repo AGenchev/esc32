@@ -21,7 +21,7 @@
 
 #define VERSION			"2.1.0"
 
-#include "digital.h"
+#include "GPIO.h"
 
 #define ESC_DEBUG				// uncomment to include debugging code
 
@@ -35,13 +35,13 @@
 #define NOP			{__asm volatile ("nop\n\t");}
 #define NOPS_4			{NOP; NOP; NOP; NOP;}
 
-enum escStates {
-    ESC_STATE_DISARMED = 0,
-    ESC_STATE_STOPPED,
+typedef enum  {
+    ESC_STATE_DISARMED = 0,  // esc32 abnormal stop state
+    ESC_STATE_STOPPED,       
     ESC_STATE_NOCOMM,
     ESC_STATE_STARTING,
     ESC_STATE_RUNNING
-};
+} escStates_t;
 
 enum escInputModes {
     ESC_INPUT_PWM = 0,
@@ -52,21 +52,12 @@ enum escInputModes {
     ESC_INPUT_MAX
 };
 
-enum escDisarmReasons {
-    REASON_STARTUP = 0,
-    REASON_BAD_DETECTS,
-    REASON_CROSSING_TIMEOUT,
-    REASON_PWM_TIMEOUT,
-    REASON_LOW_VOLTAGE,
-    REASON_CLI_USER,
-    REASON_BINARY_USER,
-    REASON_CAN_USER,
-    REASON_CAN_TIMEOUT
-};
 
-extern digitalPin *errorLed, *statusLed, *tp;
+
+
 extern volatile uint32_t minCycles, idleCounter, totalCycles;
-extern volatile uint8_t state, inputMode;
+extern volatile escStates_t ESC_state;
+extern volatile uint8_t inputMode;
 
 extern void escRun(void);
 

@@ -13,7 +13,7 @@
     You should have received a copy of the GNU General Public License
     along with AutoQuad ESC32.  If not, see <http://www.gnu.org/licenses/>.
 
-    Copyright © 2011-2014  Bill Nesbitt
+    Copyright ï¿½ 2011-2014  Bill Nesbitt
 */
 
 #ifndef _BINARY_H
@@ -30,7 +30,7 @@ enum binaryParseStates {
     BINARY_STATE_CHKB
 };
 
-enum binaryCommands {
+typedef enum binaryCommands {
     BINARY_COMMAND_NOP = 0,
     BINARY_COMMAND_ARM,
     BINARY_COMMAND_CLI,
@@ -49,7 +49,7 @@ enum binaryCommands {
     BINARY_COMMAND_GET_PARAM_ID,
     BINARY_COMMAND_ACK = 250,
     BINARY_COMMAND_NACK
-};
+} binaryCommands_t;
 
 enum binaryValues {
     BINARY_VALUE_NONE = 0,
@@ -72,7 +72,7 @@ enum binaryValues {
 };
 
 typedef struct {
-    uint8_t command;
+    uint8_t command; // binaryCommands_t
     uint16_t seqId;
     float params[4];
 } __attribute__((packed)) binaryCommandStruct_t;

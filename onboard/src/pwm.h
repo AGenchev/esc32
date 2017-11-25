@@ -1,3 +1,5 @@
+// PWM communication protocol (PWM control protocol)
+
 /*
     This file is part of AutoQuad ESC32.
 
@@ -22,29 +24,32 @@
 #include "config.h"
 #include "stm32f10x_tim.h"
 
+
 #define PWM_PORT	    GPIOA
 #define PWM_PIN		    GPIO_Pin_8
 
-#define PWM_OUTPUT	    {PWM_PORT->CRH = (PWM_PORT->CRH & ~0x0f) | 0x03;}
-#define PWM_INPUT	    {PWM_PORT->CRH = (PWM_PORT->CRH & ~0x0f) | 0x04;}
-#define PWM_SAMPLE_LEVEL    ((PWM_PORT->IDR & (0x01<<8))>>8)
+#define PWM_OUTPUT	    {PWM_PORT->CRH = (PWM_PORT->CRH & ~0x0f) | 0x03;} //  GPIOA_8 is configured for output mode 50MHZ
+#define PWM_INPUT	    {PWM_PORT->CRH = (PWM_PORT->CRH & ~0x0f) | 0x04;}   // GPIOA_8 is configured for floating input mode
+#define PWM_SAMPLE_LEVEL    ((PWM_PORT->IDR & (0x01<<8))>>8)              // Read IO data for GPIOA_8
 
-#define PWM_TIM		    TIM1
-#define PWM_CHANNEL	    TIM_Channel_1
-#define PWM_IRQ		    TIM1_CC_IRQn
+#define PWM_TIM		    	TIM1
+#define PWM_CHANNEL	    	TIM_Channel_1
+#define PWM_IRQ		    	TIM1_CC_IRQn
 #define PWM_IRQ_HANDLER	    TIM1_CC_IRQHandler
 #define PWM_CLK_DIVISOR	    72
 
 #define PWM_TIMEOUT	    (200000*TIMER_MULT)	    // micros that the last received PWM signal is valid for (0.2 seconds)
 
-#define	PWM_RPM_SCALE_MIN   1000.0f
-#define	PWM_RPM_SCALE_MAX   20000.0f
+#define	PWM_RPM_SCALE_MIN   	1000
+#define	PWM_RPM_SCALE_MAX   	20000
 
+#ifdef ENABLE_PWM_PROTOCOL
+// PWM Protocol variables:
 extern int16_t pwmMinPeriod;
 extern int16_t pwmMaxPeriod;
 extern int16_t pwmMinValue;
-extern int16_t pwmLoValue;
-extern int16_t pwmHiValue;
+extern uint16_t pwmLoValue;
+extern uint16_t pwmHiValue;
 extern int16_t pwmMaxValue;
 extern int16_t pwmMinStart;
 extern volatile uint32_t pwmValidMicros;
@@ -55,5 +60,6 @@ extern void pwmSetConstants(void);
 extern void pwmIsrAllOff(void);
 extern void pwmIsrAllOn(void);
 extern void pwmIsrRunOn(void);
+#endif //ENABLE_PWM_PROTOCOL
 
 #endif

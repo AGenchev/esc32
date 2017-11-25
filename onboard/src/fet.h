@@ -18,8 +18,9 @@
 
 #ifndef _FET_H
 #define _FET_H
-
+#include <math.h>
 #include "stm32f10x_gpio.h"
+
 
 #define FET_A_L_PORT		GPIOA
 #define FET_B_L_PORT		GPIOB
@@ -122,8 +123,8 @@
     FET_C_L_PORT->BSRR = CL_OFF; \
 }
 
-enum fetSelfTestResults {
-    FET_TEST_NOT_RUN = 0,
+typedef enum _fetSelfTestResults
+{   FET_TEST_NOT_RUN = 0,
     FET_TEST_PASSED,
     FET_TEST_A_LO_FAIL,
     FET_TEST_B_LO_FAIL,
@@ -131,39 +132,39 @@ enum fetSelfTestResults {
     FET_TEST_A_HI_FAIL,
     FET_TEST_B_HI_FAIL,
     FET_TEST_C_HI_FAIL
-};
+} fetSelfTestResults_t;
 
-extern int32_t fetSwitchFreq;
-extern int32_t fetStartDuty;
-extern int16_t fetStartDetects;
-extern int16_t fetDisarmDetects;
+extern uint32_t fetSwitchFreq;
+extern uint32_t fetStartDuty;
+extern uint16_t fetStartDetects;
+extern uint16_t fetDisarmDetects;
 
 extern volatile uint8_t fetStep;
 extern volatile int8_t fetNextStep;
 extern volatile uint32_t fetBadDetects;
 extern volatile uint32_t fetGoodDetects;
 extern volatile uint32_t fetTotalBadDetects;
-extern int32_t fetActualDutyCycle;
-extern volatile int32_t fetDutyCycle;
-extern int32_t fetPeriod;
+extern uint32_t fetActualDutyCycle;
+extern volatile uint32_t fetDutyCycle; // only >=0
+extern uint32_t fetPeriod;
 extern volatile uint32_t fetCommutationMicros;
-extern int8_t fetBrakingEnabled;
+extern uint8_t fetBrakingEnabled;
 extern int8_t fetBraking;
 extern int8_t fetStepDir;
 extern float servoAngle;
 
 extern void fetInit(void);
-extern uint8_t fetSelfTest(void);
+extern fetSelfTestResults_t fetSelfTest(void);
 extern void fetBeep(uint16_t freq, uint16_t duration);
-extern void fetCommutate(int unused);
-extern void fetSetStep(int n);
-extern void fetSetDutyCycle(int32_t dutyCycle);
+extern void fetCommutate(uint32_t period); // last crossing period
+extern void fetSetStep(unsigned int n);
+extern void fetSetDutyCycle(uint32_t dutyCycle); // Set fet duty cycle variable with bound checking
 extern void motorStartSeqInit (void);
 extern void motorStartSeq (int period);
 extern void fetStartCommutation(uint8_t startStep);
 extern void fetSetConstants(void);
 extern void fetSetBraking(int8_t value);
-extern void _fetSetDutyCycle(int32_t dutyCycle);
+extern void fetApplyDutyCycle(uint32_t dutyCycle);
 extern void fetSetAngleFromPwm(int32_t pwm);
 extern void fetSetAngle(float angle);
 extern void fetUpdateServo(void);

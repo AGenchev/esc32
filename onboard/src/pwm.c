@@ -1,3 +1,5 @@
+// PWM communication protocol (PWM control protocol)
+
 /*
     This file is part of AutoQuad ESC32.
 
@@ -15,47 +17,65 @@
 
     Copyright © 2011, 2012  Bill Nesbitt
 */
-
+/*  Pwm.c file. This file has 2 functions, 2 functions are used separately, can not be used at the same time
+  * 1, pwm in input mode, pwm input interrupt, call runNewInput function
+  * 2, one wire communication protocol, pwm input interrupt, call owEdgeDetect function to enter the new data, call owReset function to reset 1wire communication
+  *
+  */
 #include "pwm.h"
 #include "timer.h"
 #include "run.h"
 #include "main.h"
+#ifdef ENABLE_ONEWIRE
 #include "ow.h"
+#endif
 #include "stm32f10x_gpio.h"
 #include "stm32f10x_tim.h"
 #include "misc.h"
 
-int16_t pwmMinPeriod;
+
+
+#ifdef ENABLE_PWM_PROTOCOL
+
+// ========== PWM communication protocol: ============================================================
+
+int16_t pwmMinPeriod;   // timer1 ch1 pwm minimum period
 int16_t pwmMaxPeriod;
 int16_t pwmMinValue;
-int16_t pwmLoValue;
-int16_t pwmHiValue;
+uint16_t pwmLoValue;	// cached value of parameters[PWM_LO_VALUE] ~ 1000U. But also used in fetsetDuty() !!!
+uint16_t pwmHiValue;	// cached value of parameters[PWM_HI_VALUE] ~ 1950U
 int16_t pwmMaxValue;
 int16_t pwmMinStart;
-volatile uint32_t pwmValidMicros;
+volatile uint32_t pwmValidMicros; // ?
 
-inline void pwmIsrAllOff(void) {
+// stop input capture compare interrupt 1 and 2
+inline void pwmIsrAllOff(void)
+{
     PWM_TIM->DIER &= (uint16_t)~(TIM_IT_CC1 | TIM_IT_CC2);
 }
-
-inline void pwmIsrAllOn(void) {
+// Enable input capture compare interrupt 1 and 2
+inline void pwmIsrAllOn(void)
+{
     PWM_TIM->CCR1;
     PWM_TIM->CCR2;
     PWM_TIM->DIER |= (TIM_IT_CC1 | TIM_IT_CC2);
 }
 
-inline void pwmIsrRunOn(void) {
-    uint16_t dier = PWM_TIM->DIER;
+// enable capture compare 2 interrupt
+inline void pwmIsrRunOn(void)
+{
+	uint16_t dier = PWM_TIM->DIER;
 
-    dier &= (uint16_t)~(TIM_IT_CC1 | TIM_IT_CC2);
-    dier |= TIM_IT_CC2;
+	dier &= (uint16_t) ~(TIM_IT_CC1 | TIM_IT_CC2);
+	dier |= TIM_IT_CC2;
 
-    PWM_TIM->CCR1;
-    PWM_TIM->CCR2;
-    PWM_TIM->DIER = dier;
+	PWM_TIM->CCR1;
+	PWM_TIM->CCR2;
+	PWM_TIM->DIER = dier;
 }
 
-void pwmInit(void) {
+void pwmInit(void)
+{
     GPIO_InitTypeDef GPIO_InitStructure;
     NVIC_InitTypeDef NVIC_InitStructure;
     TIM_ICInitTypeDef  TIM_ICInitStructure;
@@ -71,8 +91,8 @@ void pwmInit(void) {
 
     // Enable the TIM1 global Interrupt
     NVIC_InitStructure.NVIC_IRQChannel = PWM_IRQ;
-    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 2;
-    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
+    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 3;
+    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
     NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
     NVIC_Init(&NVIC_InitStructure);
 
@@ -89,7 +109,7 @@ void pwmInit(void) {
     TIM_ICInitStructure.TIM_ICFilter = 0x08;
     TIM_PWMIConfig(PWM_TIM, &TIM_ICInitStructure);
 
-    // Select the TIM Input Trigger: TI1FP1
+    // Select the TIM Input Trigger: TI1FP1  filtered timer input 1 (TI1FP1)
     TIM_SelectInputTrigger(PWM_TIM, TIM_TS_TI1FP1);
 
     // Select the slave Mode: Reset Mode
@@ -104,48 +124,66 @@ void pwmInit(void) {
     pwmIsrAllOn();
 }
 
-void PWM_IRQ_HANDLER(void) {
-    uint16_t pwmValue;
-    uint16_t periodValue;
-    uint8_t edge;
+// #define - Defined as TIM1_CC_IRQHandler
+void PWM_IRQ_HANDLER(void)
+{
+	uint16_t pwmValue;
+	uint16_t periodValue;
+	uint8_t edge;
 
-    edge = !(PWM_TIM->SR & TIM_IT_CC2);
+	edge = !(PWM_TIM->SR & TIM_IT_CC2);
 
-    periodValue = PWM_TIM->CCR1;
-    pwmValue = PWM_TIM->CCR2;
+	periodValue = PWM_TIM->CCR1;
+	pwmValue = PWM_TIM->CCR2;
 
-    // is this an OW reset pulse?
-    if (state == ESC_STATE_DISARMED && edge == 1 && (periodValue - pwmValue) > OW_RESET_MIN && (periodValue - pwmValue) < OW_RESET_MAX) {
-	owReset();
-    }
-    // look for good RC PWM input
-    else if (inputMode == ESC_INPUT_PWM && periodValue >= pwmMinPeriod && periodValue <= pwmMaxPeriod && pwmValue >= pwmMinValue && pwmValue <= pwmMaxValue) {
-	if (edge == 0) {
-	    pwmValidMicros = timerMicros;
-	    runNewInput(pwmValue);
+#ifdef ENABLE_ONEWIRE
+	// is this an OW reset pulse?
+	if (state == ESC_STATE_DISARMED && edge == 1
+			&& (periodValue - pwmValue) > OW_RESET_MIN
+			&& (periodValue - pwmValue) < OW_RESET_MAX)
+	{
+		owReset();
 	}
-    }
-    // otherwise if already in OW mode, pass control to OW
-    else if (inputMode == ESC_INPUT_OW) {
-	owEdgeDetect(edge);
-    }
+	// look for good RC PWM input
+	else
+#endif
+	if (inputMode == ESC_INPUT_PWM && periodValue >= pwmMinPeriod
+			&& periodValue <= pwmMaxPeriod && pwmValue >= pwmMinValue
+			&& pwmValue <= pwmMaxValue)
+	{
+		if (edge == 0)
+		{
+			pwmValidMicros = timerMicros;
+			runNewInput(pwmValue);
+		}
+	}
+#ifdef ENABLE_ONEWIRE
+	// otherwise if already in OW mode, pass control to OW
+	else if (inputMode == ESC_INPUT_OW)
+	{
+		owEdgeDetect(edge);
+	}
+#endif
 }
 
-void pwmSetConstants(void) {
-    float rpmScale = p[PWM_RPM_SCALE];
 
-    pwmMinPeriod = p[PWM_MIN_PERIOD] = (int)p[PWM_MIN_PERIOD];
-    pwmMaxPeriod = p[PWM_MAX_PERIOD] = (int)p[PWM_MAX_PERIOD];
-    pwmMinValue = p[PWM_MIN_VALUE] = (int)p[PWM_MIN_VALUE];
-    pwmLoValue = p[PWM_LO_VALUE] = (int)p[PWM_LO_VALUE];
-    pwmHiValue = p[PWM_HI_VALUE] = (int)p[PWM_HI_VALUE];
-    pwmMaxValue = p[PWM_MAX_VALUE] = (int)p[PWM_MAX_VALUE];
-    pwmMinStart = p[PWM_MIN_START] = (int)p[PWM_MIN_START];
+void pwmSetConstants(void)
+{
+	uint32_t rpmScale = parameters_asUint32[PWM_RPM_SCALE];
 
-    if (rpmScale < PWM_RPM_SCALE_MIN)
-	rpmScale = PWM_RPM_SCALE_MIN;
-    else if (rpmScale > PWM_RPM_SCALE_MAX)
-	rpmScale = PWM_RPM_SCALE_MAX;
+	pwmMinPeriod = parameters_asUint32[PWM_MIN_PERIOD];  // PWM minimum cycle timer1 ch1
+	pwmMaxPeriod = parameters_asUint32[PWM_MAX_PERIOD];
+	pwmMinValue  = parameters_asUint32[PWM_MIN_VALUE];
+	pwmLoValue   = parameters_asUint32[PWM_LO_VALUE];
+	pwmHiValue   = parameters_asUint32[PWM_HI_VALUE];
+	pwmMaxValue  = parameters_asUint32[PWM_MAX_VALUE];
+	pwmMinStart  = parameters_asUint32[PWM_MIN_START];
 
-    p[PWM_RPM_SCALE] = rpmScale;
+	if (rpmScale < PWM_RPM_SCALE_MIN)	rpmScale = PWM_RPM_SCALE_MIN;
+	else if (rpmScale > PWM_RPM_SCALE_MAX)
+		rpmScale = PWM_RPM_SCALE_MAX;
+
+	parameters_asUint32[PWM_RPM_SCALE] = rpmScale;
 }
+
+#endif //ENABLE_PWM_PROTOCOL

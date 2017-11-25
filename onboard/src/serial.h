@@ -28,8 +28,8 @@
 #define SERIAL_UART_RX_PIN	GPIO_Pin_10
 //#define SERIAL_UART_CTS_PIN	GPIO_Pin_11
 //#define SERIAL_UART_RTS_PIN	GPIO_Pin_12
-#define SERIAL_TX_DMA		DMA1_Channel4
-#define SERIAL_RX_DMA		DMA1_Channel5
+#define SERIAL_TX_DMA_CHANNEL		DMA1_Channel4
+#define SERIAL_RX_DMA_CHANNEL		DMA1_Channel5
 
 #define SERIAL_MIN_BAUD		9600
 #define SERIAL_MAX_BAUD		921600
@@ -50,7 +50,7 @@ extern void serialWrite(int ch);
 extern void serialPrint(const char *str);
 extern unsigned char serialAvailable();
 extern int serialRead();
-extern void serialSetConstants(void);
+extern void serialCheckAndSetConstants(void);
 
 
 #endif

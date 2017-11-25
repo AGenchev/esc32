@@ -13,7 +13,7 @@
     You should have received a copy of the GNU General Public License
     along with AutoQuad ESC32.  If not, see <http://www.gnu.org/licenses/>.
 
-    Copyright © 2011, 2012, 2013  Bill Nesbitt
+    Copyright ï¿½ 2011, 2012, 2013  Bill Nesbitt
 */
 
 #ifndef _TIMER_H
@@ -22,31 +22,33 @@
 #include "stm32f10x_tim.h"
 
 #define TIMER_TIM	    TIM2
-#define TIMER_IRQ_CH	    TIM2_IRQn
+#define TIMER_IRQ_CH	TIM2_IRQn
 #define TIMER_ISR	    TIM2_IRQHandler
-#define TIMER_MULT	    2//4		    // 0.5 us resolution
+#define TIMER_MULT	    2 //4		    // 0.5 us resolution when timer @ 2 MHz
 #define TIMER_MASK	    0xFFFFFFFF	    // for testing timer roll-over
 
 typedef void timerCallback_t(int);
+typedef void timerCallback_ut(uint32_t); // reflects cases when the parameter is unsigned int32
 
-typedef struct {
-    timerCallback_t *alarm1Callback;
-    int alarm1Parameter;
+typedef struct
+{
+	timerCallback_ut *alarm1Callback;
+	uint32_t alarm1Parameter;
 
-    timerCallback_t *alarm2Callback;
-    int alarm2Parameter;
+	timerCallback_t *alarm2Callback;
+	int alarm2Parameter;
 
-    timerCallback_t *alarm3Callback;
-    int alarm3Parameter;
+	timerCallback_t *alarm3Callback;
+	int alarm3Parameter;
 } timerStruct_t;
 
 extern volatile uint32_t timerMicros;
 
 extern void timerInit(void);
 extern void timerDelay(uint16_t us);
-extern void timerSetAlarm1(int32_t us, timerCallback_t *callback, int parameter);
-extern void timerSetAlarm2(int32_t us, timerCallback_t *callback, int parameter);
-extern void timerSetAlarm3(int32_t us, timerCallback_t *callback, int parameter);
+extern void timerSetAlarm1(uint32_t us, timerCallback_ut *callback, uint32_t parameter);
+extern void timerSetAlarm2(uint32_t us, timerCallback_t *callback, int parameter);
+extern void timerSetAlarm3(uint32_t us, timerCallback_t *callback, int parameter);
 extern void timerCancelAlarm1(void);
 extern void timerCancelAlarm2(void);
 extern void timerCancelAlarm3(void);

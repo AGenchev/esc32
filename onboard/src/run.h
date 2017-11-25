@@ -21,48 +21,65 @@
 
 #include "misc.h"
 
-#define RUN_FREQ		2000		    // Hz
+#define RUN_FREQ		2000		    // PID run Freq, Hz
 #define RUN_ARM_COUNT		20		    // number of valid PWM signals seen before arming
 #define RUN_MIN_MAX_CURRENT	0.0		    // Amps
 #define RUN_MAX_MAX_CURRENT	75.0		    // Amps
 
-//#define RUN_ENABLE_IWDG
+//#define RUN_ENABLE_IWDG				// TODO: enable this in production state only
 #define RUN_LSI_FREQ		40000		    // 40 KHz LSI for IWDG
 
-enum runCommandModes {
-    CLI_MODE = 0,
-    BINARY_MODE
-};
+typedef enum
+{
+	CLI_MODE = 0, BINARY_MODE
+} runCommandModes_t;
 
-enum runModes {
-    OPEN_LOOP = 0,
-    CLOSED_LOOP_RPM,
-    CLOSED_LOOP_THRUST,
-    SERVO_MODE,
-    NUM_RUN_MODES
-};
+typedef enum
+{
+	OPEN_LOOP = 0,
+	CLOSED_LOOP_RPM,
+	CLOSED_LOOP_THRUST,
+	SERVO_MODE,
+	NUM_RUN_MODES
+} runModes_t;
+
+typedef enum  {
+    REASON_STARTUP = 0,
+    REASON_BAD_DETECTS,
+    REASON_CROSSING_TIMEOUT, // ADC conversion timeout
+    REASON_PWM_TIMEOUT,      // pwm control interface: input timeout
+    REASON_LOW_VOLTAGE,
+    REASON_CLI_USER,
+    REASON_BINARY_USER,
+    REASON_CAN_USER,
+    REASON_CAN_TIMEOUT
+} escDisarmReasons_t;
 
 extern volatile uint32_t runCount;
-extern float idlePercent;
+extern uint32_t U_idle_x100;// extern float idlePercent;
+
 extern float avgAmps, maxAmps;
-extern float avgVolts;
+
+extern float avgBattVolts;
+extern uint32_t avg_BattmiliVolts;
+
 extern float rpm;
-extern float targetRpm;
+extern uint32_t targetRpm;
 extern float runRPMFactor;
 extern uint8_t disarmReason;
 extern uint8_t commandMode;
 extern uint8_t escId;
-volatile extern uint8_t runMode;
+extern volatile runModes_t runMode;
 
 extern void runInit(void);
 extern void runNewInput(uint16_t setpoint);
-extern void runDisarm(int reason);
+extern void runDisarm(escDisarmReasons_t reason);
 extern void runArm(void);
 extern void runStart(void);
 extern void runStop(void);
 extern uint8_t runDuty(float duty);
 extern void runRpmPIDReset(void);
-extern void runSetConstants(void);
+extern void runCheckAndSetConstants(void);
 extern uint16_t runIWDGInit(int ms);
 extern void runFeedIWDG(void);
 extern void runSetpoint(uint16_t val);
