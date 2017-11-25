@@ -1,269 +1,277 @@
-# Makefile for ESC32 firmware
-#
-# ! Use of this makefile requires setup of a compatible development environment.
-# ! For latest development recommendations, check here: http://autoquad.org/wiki/wiki/development/
-# ! This file is ignored when building with CrossWorks Studio.
-#
-# All paths are relative to Makefile location.  Possible make targets:
-#  all         build firmware .elf and .hex binaries
-#  flash       attempt to build ../ground/loader and flash firmware to board (linux only)
-#  pack        create .zip archive of generated .hex file (requires GNU zip)
-#  clean       delete all built objects (not binaries or archives)
-#  clean-bin   delete all binaries created in build folder (*.elf, *.bin, *.hex)
-#  clean-pack  delete all archives in build folder (*.zip)
-#  clean-all   run all the above clean* steps.
-#
-# Read comments below under "External libraries required by ESC32" for dependency details.
-#
-# Build from inside an svn repo folder because 'svnversion' command is used to retrieve the latest revision number.
-#
-# Usage examples:
-#  make all                                  # default Release type builds .hex and .elf binaries
-#  make all BUILD_TYPE=Debug                 # build with compiler debugging flags/options enabled
-#  make all BUILD_TYPE=test INCR_BUILDNUM=0  # build a release version in a folder named "test", don't increment the buildnumber
-#
-# Windows needs some core GNU tools in your %PATH% (probably same place your "make" is). 
-#    Required: gawk, mv, echo, rm
-#    Optional: mkdir (auto-create build folders),  zip (to compress hex files using make pack)
-#   Also see EXE_MKDIR variable below -- due to a naming conflict with the Windows "mkdir", you may need to specify a full path for it.
-#   Recommend GnuWin32 CoreUtils http://gnuwin32.sourceforge.net/packages/coreutils.htm
-#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at: http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# File: Makefile.
+# For KL25Z GCC demo (baremetal) Copyright (c) 12.2013, Martin Kojtal (0xc0170)
+# Modified for STM32F1xxx by Angel Genchev
 
-# Include user-specific settings file, if any, in regular Makefile format.
-# This file can set any default variable values you wish to override (all defaults are listed below).
-# The .user file is not included with the source code distribution, so it will not be overwritten.
--include Makefile.user
+#CPU = cortex-m0plus
+CPU = cortex-m3
+INSTRUCTION_MODE = thumb
 
-# Defaults - modify here, on command line, or in Makefile.user
-#
-# Output folder name; Use 'Debug' to set debug compiler options;
-BUILD_TYPE ?= Release
-# Path to source files - no trailing slash
-SRC_PATH ?= .
-# Increment build number? (0|1)  This is automatically disabled for debug builds.
-INCR_BUILDNUM ?= 1
-# Produced binaries file name prefix (version/revision/build/hardware info will be automatically appended)
-BIN_NAME ?= esc32
-# Build debug version? (0|1; true by default if build_type contains the word "debug")
-ifeq ($(findstring Debug, $(BUILD_TYPE)), Debug)
-	DEBUG_BUILD ?= 1
-else 
-	DEBUG_BUILD ?= 0
-endif
-# Flashing interface (Linux only)
-USB_DEVICE ?= /dev/ttyUSB0
+# DEBUG_IN_RAM: Gele: = 0 for RAM, 1 - for flash
+RUN_FROM_FLASH = 1
 
-# You may also use BIN_SUFFIX to append text 
-# to generated bin file name after version string;
-# BIN_SUFFIX = 
-
-
-# System-specific folder paths
-#
-# compiler base path
-CC_PATH ?= /usr/share/crossworks_for_arm_2.3
-#CC_PATH ?= C:/devel/gcc/crossworks_for_arm_2.3
-
-# shell commands
-EXE_AWK ?= gawk 
-EXE_MKDIR ?= mkdir
-#EXE_MKDIR = C:/cygwin/bin/mkdir
-EXE_ZIP ?= zip
-# file extention for compressed files (gz for gzip, etc)
-ZIP_EXT ?= zip
-
-# Path to stm32 includes
-AQLIB_PATH ?= ..
-#AQLIB_PATH = C:/devel/AQ/lib
-
-# Where to put the built objects and binaries.
-# A sub-folder is created along this path, named as the BUILD_TYPE.
-#BUILD_PATH ?= .
-BUILD_PATH ?= ../build
-
-# Add preprocessor definitions here
-CC_VARS ?=
-
-
-# defaults end
+FOLDER_NAME = CPU_STM32
 
 #
-## probably don't need to change anything below here ##
+# Define linker script file here
 #
-
-# build/object directory
-OBJ_PATH = $(BUILD_PATH)/$(BUILD_TYPE)/obj
-# bin file(s) output path
-BIN_PATH = $(BUILD_PATH)/$(BUILD_TYPE)
-
-# command to execute (later, if necessary) for increasing build number in buildnum.h
-CMD_BUILDNUMBER = $(shell $(EXE_AWK) '$$2 ~ /BUILDNUMBER/{ $$NF=$$NF+1 } 1' $(SRC_PATH)/buildnum.h > $(SRC_PATH)/tmp_buildnum.h && mv $(SRC_PATH)/tmp_buildnum.h $(SRC_PATH)/buildnum.h)
-
-# get current revision and build numbers
-FW_VER := $(shell $(EXE_AWK) 'BEGIN { FS = "[ \"]+" }$$2 ~ /VERSION/{print $$3}' $(SRC_PATH)/main.h)
-REV_NUM := $(shell svnversion)
-BUILD_NUM := $(shell $(EXE_AWK) '$$2 ~ /BUILDNUMBER/{print $$NF}' $(SRC_PATH)/buildnum.h)
-ifeq ($(INCR_BUILDNUM), 1)
-	BUILD_NUM := $(shell echo $$[$(BUILD_NUM)+1])
-endif
-
-# Resulting bin file names before extension
-ifeq ($(DEBUG_BUILD), 1)
-	# debug build gets a consistent name to simplify dev setup
-	BIN_NAME := $(BIN_NAME)-debug
-	INCR_BUILDNUM = 0
+ifeq ($(RUN_FROM_FLASH), 0)
+LINKER_NAME = stm32-RAM
+FULL_PRJ = $(PROJECT)_ram
 else
-	BIN_NAME := $(BIN_NAME)v$(FW_VER).r$(REV_NUM).b$(BUILD_NUM)
-	ifdef BIN_SUFFIX
-		BIN_NAME := $(BIN_NAME)-$(BIN_SUFFIX)
-	endif
+LINKER_NAME = stm32-FLASH
+FULL_PRJ = $(PROJECT)_rom
 endif
 
-# Compiler-specific paths
-CC_BIN_PATH = $(CC_PATH)/gcc/arm-unknown-elf/bin
-CC_LIB_PATH = $(CC_PATH)/lib
-CC_INC_PATH = $(CC_PATH)/include
-CC = $(CC_BIN_PATH)/cc1
-AS = $(CC_BIN_PATH)/as
-LD = $(CC_BIN_PATH)/ld
-OBJCP = $(CC_BIN_PATH)/objcopy
 
-#
-## External libraries required by ESC32
-#
-# Files from Crossworks SMT32 package: esc32.ld (renamed from STM32f4.ld), STM32F10X_MD.vec, STM32_Startup.s, thumb_crt0.s, & the /include folder
-STMLIB_PATH = $(AQLIB_PATH)/STM32
-
-# all include flags for the compiler
-CC_INCLUDES :=  -I$(SRC_PATH) -I$(STMLIB_PATH)/include -I$(CC_INC_PATH)
-
-# compiler flags
-CC_OPTS = -mcpu=cortex-m3 -mthumb -mlittle-endian -mfpu=vfp -mfloat-abi=soft -nostdinc -Wall -std=c99 \
-	-fno-dwarf2-cfi-asm -fno-builtin -ffunction-sections -fdata-sections -fno-common -fmessage-length=0 -quiet -MD $(basename $@).d -MQ $@
-
-# macro definitions to pass via compiler command line
-#
-CC_VARS += -D__CROSSWORKS_ARM -D__ARM_ARCH_7M__ -D__TARGET_PROCESSOR=STM32F103CB -D__TARGET_MD= -DSTM32F10X_MD= -D__THUMB -DUSE_STDPERIPH_DRIVER 
+# STM32 specific defines !!! - set the external clock frequency 
+HSE_VALUE = 8000000L
+DEFINES = HSE_VALUE=$(HSE_VALUE) 
+USE_STDPERIPH_DRIVER = -DUSE_STDPERIPH_DRIVER
+# Uncomment the appropriate device type and startup file
+#DEVICE_TYPE = STM32F10X_LD
+#STARTUP_FILE = stm32f10x_ld
+DEVICE_TYPE = STM32F10X_MD
+#STARTUP_FILE = stm32f10x_md
+#DEVICE_TYPE = STM32F10X_HD
+#STARTUP_FILE = stm32f10x_hd
+#DEVICE_TYPE = STM32F10X_LD_VL
+#STARTUP_FILE = stm32f10x_ld_vl
+#DEVICE_TYPE = STM32F10X_MD_VL
+#STARTUP_FILE = stm32f10x_md_vl
+#DEVICE_TYPE = STM32F10X_HD_VL
+#STARTUP_FILE = stm32f10x_hd_vl
+#DEVICE_TYPE = STM32F10X_XL
+#STARTUP_FILE = stm32f10x_xl
+#DEVICE_TYPE = STM32F10X_CL
+#STARTUP_FILE = stm32f10x_cl
 
 
-# Additional target(s) to build based on conditionals
-#
-EXTRA_TARGETS =
-ifeq ($(INCR_BUILDNUM), 1)
-	EXTRA_TARGETS = BUILDNUMBER
-endif
+# toolchain specific
+TOOLCHAIN = arm-none-eabi-
+CC = $(TOOLCHAIN)gcc
+CXX = $(TOOLCHAIN)g++
+AS = $(TOOLCHAIN)gcc -x assembler-with-cpp
+LD = $(TOOLCHAIN)gcc
+OBJCP = $(TOOLCHAIN)objcopy
+AR = $(TOOLCHAIN)ar
 
-# build type flags/defs (debug vs. release)
-# (exclude STARTUP_FROM_RESET in debug builds if using Rowley debugger)
-ifeq ($(DEBUG_BUILD), 1)
-	BT_CFLAGS = -DDEBUG -DSTARTUP_FROM_RESET -DUSE_FULL_ASSERT -O1 -ggdb -g2
+# application specific
+TARGET = main
+TARGET_EXT = elf
+LD_SCRIPT = src/$(FOLDER_NAME)/$(LINKER_NAME).ld
+DEFINES += -DTOOLCHAIN_GCC_ARM -DNDEBUG -DCMSIS
+
+# directories: 
+OUT_DIR = build
+
+INCLUDE_DIRS =  src  src/$(FOLDER_NAME)  /opt/gcc-arm-none-eabi-5_4-2016q3/arm-none-eabi/include
+INCLUDE_DIRS += src/common  src/common/stdlib src/lib/STM32F10x_StdPeriph_Driver 
+INCLUDE_DIRS += src/lib/STM32F10x_StdPeriph_Driver/inc  src/lib/CMSIS_CM3
+INCLUDE_DIRS += src/lib/Baselibc/include  
+# gcc includes. We must specify these when we have put "-nostdinc" compiler switch:
+INCLUDE_DIRS += /opt/gcc-arm-none-eabi-5_4-2016q3/arm-none-eabi/include /opt/gcc-arm-none-eabi-5_4-2016q3/lib/gcc/arm-none-eabi/5.4.1/include
+# app headers directories (remove comment and add more files)
+INCLUDE_DIRS +=./STM32_USB-FS-Device_Driver
+INCLUDE_DIRS += src/RF  src/RF_FEC  src/Peripheral_IO  src/USB 
+# USB HID Keyboard hdr:
+INCLUDE_DIRS += src/lib/STM32_USB-FS-Device_Lib
+
+SRC_DIRS =  src  src/$(FOLDER_NAME) src/common  src/common/stdlib
+# ../cmsis ../cmsis/$(FOLDER_NAME)
+# app source directories (remove comment and add more files)
+SRC_DIRS += src/lib  src/RF  src/RF_FEC  src/Peripheral_IO  src/USB
+# USB HID Keyboard src:
+SRC_DIRS +=  src/lib/STM32_USB-FS-Device_Lib
+# [OPTIONAL] Uncomment to use the firmware library
+FWLIB = src/lib/STM32F10x_StdPeriph_Driver/libstm32fw.a
+#CLIB  = src/lib/Baselibc/libc.a
+# [OPTIONAL] Uncomment following to enable peripheral drivers (instead of direct register access)
+# [OPTIONAL] Uncomment to use the USB library
+#USBLIB = src/lib/STM32_USB-FS-Device_Driver/libstm32usb.a
+# .a library folders go here:
+LIBRARY_DIRS = -L src/lib/STM32F10x_StdPeriph_Driver\
+ -L src/lib/STM32_USB-FS-Device_Driver\
+ -L src/lib/Baselibc
+ 
+
+# link libraries: maths library LIBM = -lm, LIBGCC = -lgcc, LIBC= -lc, 
+# libgcc: GCC generates calls to this library automatically, whenever it needs to perform some operation that is too complicated to emit inline code for. 
+# Most of the routines in libgcc handle arithmetic operations that the target processor cannot perform directly. This includes integer multiply and divide on some machines, and all floating-point and fixed-point operations on other machines. libgcc also includes routines for exception handling, and a handful of miscellaneous operations. 
+# also: https://gcc.gnu.org/onlinedocs/gcc-4.3.2/gcc/Other-Builtins.html#Other-Builtins
+
+# http://stackoverflow.com/questions/39858015/stm32-gcc-arm-none-eabi-gcc-links-printf-even-though-it-is-not-used
+
+#LIBS  = -lm -lgcc -lc -lnosys
+LIBS  = -lm     
+# add libstm32fw.a :
+LIBS += -lstm32fw
+
+
+INCLUDE_DIRS_F = -I. $(patsubst %, -I%, $(INCLUDE_DIRS))
+
+ifeq ($(strip $(OUT_DIR)), )
+	OBJ_FOLDER =
 else
-	BT_CFLAGS = -DNDEBUG -DSTARTUP_FROM_RESET -g1 -O2
+	OBJ_FOLDER = $(strip $(OUT_DIR))/
 endif
 
+DEFINES = -D$(DEVICE_TYPE) -DHSE_VALUE=$(HSE_VALUE) $(USE_STDPERIPH_DRIVER)
 
-# all compiler options
-CFLAGS = $(CC_OPTS) $(CC_INCLUDES) $(CC_VARS) $(BT_CFLAGS)
+ifeq ($(RUN_FROM_FLASH), 0)
+DEFINES += -DRUN_FROM_FLASH=0 -DVECT_TAB_SRAM
+else
+DEFINES += -DRUN_FROM_FLASH=1
+endif
 
-# assembler options
-AS_OPTS = --traditional-format -mcpu=cortex-m3 -mthumb -EL -mfpu=vfp -mfloat-abi=soft
+export DEFINES
 
-# linker (ld) options
-LINKER_OPTS = -ereset_handler --omagic -defsym=__do_debug_operation=__do_debug_operation_mempoll -u__do_debug_operation_mempoll -defsym=__vfprintf=__vfprintf_double_long_long -u__vfprintf_double_long_long \
-	-defsym=__vfscanf=__vfscanf_double_long_long -u__vfscanf_double_long_long --fatal-warnings -EL --gc-sections -T$(STMLIB_PATH)/ESC32.ld -Map $(OBJ_PATH)/ESC32.map -u_vectors
+#COMPILER_OPTIONS  = -g -ggdb -Os -Wall -fno-strict-aliasing   
+# -Wall -- This enables all the warnings about constructions that some users consider questionable, 
+# and that are easy to avoid. 
+# -Wextra -- This enables some extra warning flags
+COMPILER_OPTIONS  = -mcpu=$(CPU) -m$(INSTRUCTION_MODE) -mfpu=vfp -mfloat-abi=soft -O1 -ggdb -g2  -Wall 
+COMPILER_OPTIONS += -fno-strict-aliasing -finline -finline-functions-called-once
+COMPILER_OPTIONS += -ffunction-sections -fdata-sections -fno-exceptions -fno-delete-null-pointer-checks
+# -nostdinc option requires all include dirs to be specified !
+COMPILER_OPTIONS += -fmessage-length=0  -nostdinc -fno-builtin -fno-dwarf2-cfi-asm  -fno-common -fmessage-length=0
+COMPILER_OPTIONS += -MMD -MP $(DEFINES)  
+# Write dependency information @ "./build"; defaults are the same, but here it's explicitly said: 
+COMPILER_OPTIONS += -MF build/$(@F).d
 
-# eabi linker libs
-# ! These are proprietary Rowley libraries, approved for personal use with the AQ project (see http://forum.autoquad.org/viewtopic.php?f=31&t=44&start=50#p8476 )
-EXTRA_LIB_FILES = libcm_v7m_t_le.a libm_v7m_t_le.a libc_v7m_t_le.a libcpp_v7m_t_le.a libdebugio_v7m_t_le.a libc_targetio_impl_v7m_t_le.a libc_user_libc_v7m_t_le.a
+DEPEND_OPTS = -MF $(OBJ_FOLDER)$(@F:.o=.d)
 
-EXTRA_LIBS := $(addprefix $(CC_LIB_PATH)/, $(EXTRA_LIB_FILES))
+# Flags - incl floating point support -mfpu=vfp -std=c99
+CFLAGS = $(COMPILER_OPTIONS) $(DEPEND_OPTS) $(INCLUDE_DIRS_F) -std=gnu99 -Wall -c  
 
+CXXFLAGS = $(COMPILER_OPTIONS) $(DEPEND_OPTS) $(INCLUDE_DIRS_F) -std=gnu++98 -c
 
-# ESC32 code objects to create (correspond to .c source to compile)
-ESC32_OBJS := main.o fet.o digital.o rcc.o adc.o serial.o pwm.o timer.o run.o cli.o config.o binary.o ow.o can.o getbuildnum.o xxhash.o
+ASFLAGS = $(COMPILER_OPTIONS) $(INCLUDE_DIRS_F) -c 
 
-# STM32 related including preprocessor and startup 
-STM32_SYS_OBJ_FILES =   STM32_Startup.o thumb_crt0.o misc.o stm32f10x_gpio.o stm32f10x_rcc.o system_stm32f10x.o stm32f10x_tim.o stm32f10x_dbgmcu.o \
-	stm32f10x_adc.o stm32f10x_dma.o stm32f10x_usart.o stm32f10x_exti.o stm32f10x_pwr.o stm32f10x_flash.o stm32f10x_iwdg.o stm32f10x_can.o
-
-
-## assemble object lists
-STM32_SYS_OBJS := $(STM32_SYS_OBJ_FILES)
-STM32_OBJ_TARGET := $(OBJ_PATH)
-
-# all objects
-C_OBJECTS := $(addprefix $(OBJ_PATH)/, $(ESC32_OBJS) $(STM32_SYS_OBJS))
-
-# dependency files generated by previous make runs
-DEPS := $(C_OBJECTS:.o=.d)
+# Linker options
+# interesting article: http://www.muppetlabs.com/~breadbox/software/tiny/teensy.html
+#LD_OPTIONS = -mcpu=$(CPU) -m$(INSTRUCTION_MODE) -Os -T $(LD_SCRIPT) $(INCLUDE_DIRS_F)
+LD_OPTIONS = -mcpu=$(CPU) -m$(INSTRUCTION_MODE) -O2 -T $(LD_SCRIPT) $(INCLUDE_DIRS_F) $(LIBRARY_DIRS) 
+LD_OPTIONS += -specs=nano.specs  -specs=nosys.specs  
+#use this if %f is used, by default it's commented
+#LD_OPTIONS += -u _printf_float -u _scanf_float
+# -nostartfiles: Do not use the standard system startup files when linking: 
+# The standard system libraries are used normally, unless -nostdlib or -nodefaultlibs is used. 
+# Note: we don't get linked if we disable stdlib... 
+LD_OPTIONS += -Wl,--cref,-Map=$(OBJ_FOLDER)$(TARGET).map,--gc-sections -nostdlib -nodefaultlibs
+#,--print-gc-sections - prints what function sections get removed
+# -nostdlib leads to _start(); function missing and to program not fit in FLASH region error
 
 
-#
-## Target definitions
-#
+OBJCPFLAGS = -O ihex
 
-.PHONY: all clean-all clean clean-bin clean-pack pack CREATE_BUILD_FOLDER BUILDNUMBER
+ARFLAGS = cr
 
-all: CREATE_BUILD_FOLDER $(EXTRA_TARGETS) $(BIN_PATH)/$(BIN_NAME).hex
+RM = rm -rf
 
-clean-all: clean clean-bin clean-pack
+USER_OBJS =
+C_SRCS =
+S_SRCS =
+C_OBJS =
+S_OBJS =
 
+# compile all source/object files inside SRC_DIRS
+C_SRCS := $(foreach dir,$(SRC_DIRS),$(wildcard $(dir)/*.c))
+C_OBJS := $(patsubst %.c,$(OBJ_FOLDER)%.o,$(notdir $(C_SRCS)))
+
+CPP_SRCS := $(foreach dir,$(SRC_DIRS),$(wildcard $(dir)/*.cpp))
+CPP_OBJS := $(patsubst %.cpp,$(OBJ_FOLDER)%.o,$(notdir $(CPP_SRCS)))
+
+S_SRCS := $(foreach dir,$(SRC_DIRS),$(wildcard $(dir)/*.s))
+S_OBJS := $(patsubst %.s,$(OBJ_FOLDER)%.o,$(notdir $(S_SRCS)))
+
+VPATH := $(SRC_DIRS)
+
+$(OBJ_FOLDER)%.o : %.c
+	@echo 'Building file: $(@F)'
+	@echo 'Invoking: MCU C Compiler'
+	$(CC) $(CFLAGS) $< -o $@
+	@echo 'Finished building: $(@F)'
+	@echo ' '
+
+$(OBJ_FOLDER)%.o : %.cpp
+	@echo 'Building file: $(@F)'
+	@echo 'Invoking: MCU C++ Compiler'
+	$(CXX) $(CXXFLAGS) $< -o $@
+	@echo 'Finished building: $(@F)'
+	@echo ' '
+
+$(OBJ_FOLDER)%.o : %.s
+	@echo 'Building file: $(@F)'
+	@echo 'Invoking: MCU Assembler'
+	$(AS) $(ASFLAGS) $< -o $@
+	@echo 'Finished building: $(@F)'
+	@echo ' '
+
+# call create_outputdir, then $(FWLIB) == src/lib/STM32F10x_StdPeriph_Driver/libstm32fw.a
+# I moved print_info on the next row in order to guarantee the correct order of operations:
+all: create_outputdir $(FWLIB) $(OBJ_FOLDER)$(TARGET).$(TARGET_EXT) 
+	$(MAKE) print_info	
+
+create_outputdir:
+	$(shell mkdir $(OBJ_FOLDER) 2>/dev/null)
+
+# Tool invocations
+$(OBJ_FOLDER)$(TARGET).$(TARGET_EXT): $(LD_SCRIPT) $(C_OBJS) $(CPP_OBJS) $(S_OBJS)
+	@echo 'Building target: $@'
+	@echo 'Invoking: Linker $(LD), options:' $(LD_OPTIONS)
+	$(LD) $(LD_OPTIONS) $(CPP_OBJS) $(C_OBJS) $(S_OBJS) $(LIBS) -o $(OBJ_FOLDER)$(TARGET).$(TARGET_EXT)
+	@echo 'Finished building target: $@'
+	@echo ' '
+
+# Other Targets
 clean:
-	rm -fr $(OBJ_PATH)
-	
-clean-bin:
-	-rm -f $(BIN_PATH)/*.elf
-	-rm -f $(BIN_PATH)/*.bin
-	-rm -f $(BIN_PATH)/*.hex
+	@echo 'Removing entire out directory'
+	$(RM) $(TARGET).$(TARGET_EXT) $(TARGET).bin $(TARGET).map $(OBJ_FOLDER)*.* $(OBJ_FOLDER)
+	@echo ' '
+# execute the makefiles specified w "clean" parameter: 
+# but we commented out it - for faster build times
+#	@cd src/lib/STM32F10x_StdPeriph_Driver && $(MAKE) clean
+#	@cd src/lib/STM32_USB-FS-Device_Driver && $(MAKE) clean
 
-clean-pack:
-	-rm -f $(BIN_PATH)/*.$(ZIP_EXT)
-	
-pack:
-	@echo "Compressing binaries... "
-	$(EXE_ZIP) $(BIN_PATH)/$(BIN_NAME).hex.$(ZIP_EXT) $(BIN_PATH)/$(BIN_NAME).hex
+print_info:
+	@echo 'Printing size'
+	arm-none-eabi-size --totals $(OBJ_FOLDER)$(TARGET).$(TARGET_EXT)
+	arm-none-eabi-objcopy -O srec $(OBJ_FOLDER)$(TARGET).$(TARGET_EXT) $(OBJ_FOLDER)$(TARGET).s19
+# we use -j to set the sections it must preserve https://answers.launchpad.net/gcc-arm-embedded/+question/261132
+# it seems that (NOLOAD) for .bss solved the 512M .bin problem
+#	arm-none-eabi-objcopy  -j .isr_vector -j .text -j .flash_protect -O binary -v $(OBJ_FOLDER)$(TARGET).$(TARGET_EXT) $(OBJ_FOLDER)$(TARGET).bin
+	arm-none-eabi-objcopy -O binary -v $(OBJ_FOLDER)$(TARGET).$(TARGET_EXT) $(OBJ_FOLDER)$(TARGET).bin
+	arm-none-eabi-objdump -D $(OBJ_FOLDER)$(TARGET).$(TARGET_EXT) > $(OBJ_FOLDER)$(TARGET).lst
+	arm-none-eabi-nm $(OBJ_FOLDER)$(TARGET).$(TARGET_EXT) > $(OBJ_FOLDER)$(TARGET)-symbol-table.txt
+	@echo ' '
+#	@echo 'Printing allocation table:'
+#	arm-none-eabi-nm  $(OBJ_FOLDER)$(TARGET).$(TARGET_EXT)
 
-# include auto-generated depenency targets
--include $(DEPS)
+.PHONY: all clean print_info
 
-$(OBJ_PATH)/%.o: $(SRC_PATH)/%.c
-	@echo "## Compiling $< -> $@ ##"
-	$(CC) $(CFLAGS) $< -o $(basename $@).lst
-	@echo "## Assembling --> $@ ##"
-	$(AS) $(AS_OPTS) $(basename $@).lst -o $@
-	@rm -f $(basename $@).lst
+# fwlib
 
-$(STM32_OBJ_TARGET)/STM32_Startup.o $(STM32_OBJ_TARGET)/thumb_crt0.o: $(STM32_OBJ_TARGET)/%.o: $(STMLIB_PATH)/%.s
-	@echo "## Compiling $< -> $@ ##"
-	$(CC) $(CFLAGS) -E -lang-asm $< -o $(basename $@).lst
-	@echo "## Assembling --> $@ ##"
-	$(AS) $(AS_OPTS) -gdwarf-2 $(basename $@).lst -o $@
-	@rm -f $(basename $@).lst
+.PHONY: fwlib
+fwlib: $(FWLIB)
 
-$(BIN_PATH)/$(BIN_NAME).elf: $(C_OBJECTS)
-	@echo "## Linking --> $@ ##"
-	$(LD) -X $(LINKER_OPTS) -o $@ --start-group $(C_OBJECTS) $(EXTRA_LIBS) --end-group
+$(FWLIB): $(wildcard src/lib/STM32F10x_StdPeriph_Driver/*.h)\
+ $(wildcard src/lib/STM32F10x_StdPeriph_Driver/inc/*.h)\
+ $(wildcard src/lib/common/*.h)
+	@cd src/lib/STM32F10x_StdPeriph_Driver && $(MAKE)
 
-$(BIN_PATH)/$(BIN_NAME).bin: $(BIN_PATH)/$(BIN_NAME).elf
-	@echo "## Objcopy $< --> $@ ##"
-	$(OBJCP) -O binary $< $@
+# usblib
 
-$(BIN_PATH)/$(BIN_NAME).hex: $(BIN_PATH)/$(BIN_NAME).elf
-	@echo "## Objcopy $< --> $@ ##"
-	$(OBJCP) -O ihex $< $@
+.PHONY: usblib
+usblib: $(USBLIB)
 
-CREATE_BUILD_FOLDER :
-	@echo "Attempting to create build folders..."
-	$(EXE_MKDIR) -p $(OBJ_PATH)
+$(USBLIB): $(wildcard src/lib/STM32_USB-FS-Device_Driver/inc*.h)
+	@cd src/lib/STM32_USB-FS-Device_Driver && $(MAKE)
 
-BUILDNUMBER :
-	@echo "Incrementing Build Number"
-	$(CMD_BUILDNUMBER)
-
-## Flash-Loader (Linux only) 			##
-## Requires AQ ground tools sources	##
-$(SRC_PATH)/../ground/loader: $(SRC_PATH)/../ground/loader.c
-	(cd $(SRC_PATH)/../ground/ && make loader)
-
-flash: $(SRC_PATH)/../ground/loader
-	$(SRC_PATH)/../ground/loader -p $(USB_DEVICE) -b 115200 -f $(BIN_PATH)/$(BIN_NAME).hex
