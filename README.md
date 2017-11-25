@@ -1,6 +1,8 @@
-# code taken from esc32, reworked in gelemodxx branches. 
-Hardware will be included. The main / trunk branch of Bill Nesbitt, I will leave unmodified !!!
-Please, switch to gelemodxx branches if you want to watch my code. 
+# code from esc32, reworked in my "gelemodxx" branches. 
+Hardware is included. The main / trunk branch of Bill Nesbitt, I will leave unmodified !!!
+E.t. no pull request will be made, because I have changed too many things.
+
+Please, switch to gelemodxx branches if you want to watch my code & hardware. 
 
 <b>Note:</b>This free code <b>does not give you right seek any support on the official Autoquad / ESC32 forum</b>, because they have not sold this HW/SW and bugs to you.
 
