@@ -2,7 +2,9 @@
 Hardware is included. The main / trunk branch of Bill Nesbitt, I will leave unmodified !!!
 E.t. no pull request will be made, because I have changed too many things.
 
-Please, switch to gelemodxx branches if you want to watch my code & hardware. 
+Please, switch to gelemodxx branches if you want to see my mods & hardware. 
+Compiler & toolchain: freeware GCC (arm-none-eabi) and openocd. 
+Debug adaptor: CMSIS-DAP (opensource).
 
 <b>Note:</b> This free code <b>does NOT give you the right to seek any support on the official Autoquad / ESC32 forum</b>, because they have not sold this HW/SW and bugs to you.
 
