@@ -1,4 +1,4 @@
-# code taken from esc32, heavily reworked
+# code taken from esc32, reworked in gelemodxx branches. Hardware - included.
 Please, switch to gelemodxx branches if you want to watch my code. The main / trunk branch I will leave unmodified !!!
 Automatically exported from code.google.com/p/esc32
 
