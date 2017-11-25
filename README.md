@@ -1,4 +1,5 @@
 # code taken from esc32, heavily reworked
+Please, switch to gelemodxx branches if you want to watch my code. The main / trunk branch I will leave unmodified !!!
 Automatically exported from code.google.com/p/esc32
 
 I plan to modify this and reform the project... The goal - to compile with FOSS tools completely and to contain all source.
