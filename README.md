@@ -1,4 +1,4 @@
-# code taken from esc32
+# code taken from esc32, heavily reworked
 Automatically exported from code.google.com/p/esc32
 
 I plan to modify this and reform the project... The goal - to compile with FOSS tools completely and to contain all source.
