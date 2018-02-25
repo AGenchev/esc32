@@ -1,6 +1,7 @@
 # code from esc32, reworked in my "gelemodxx" branches. Basically I've created 'ESC32 on Bluepill' hardware.
 Hardware is included. The main / trunk branch of Bill Nesbitt, I will leave unmodified !!!
-E.t. no pull request will be made, because I have changed too many things.
+E.t. no pull request will be made, because I have changed too many things and don't intend to modify the original project.
+Hardware: https://github.com/AGenchev/esc32/tree/gelemod02/hardware
 
 Please, switch to gelemodxx branches if you want to see my mods & hardware. 
 Compiler & toolchain: freeware GCC (arm-none-eabi) and openocd. 
