@@ -1,4 +1,4 @@
-# code from esc32, reworked in my "gelemodxx" branches. 
+# code from esc32, reworked in my "gelemodxx" branches. Basically I've created 'ESC32 on Bluepill' hardware.
 Hardware is included. The main / trunk branch of Bill Nesbitt, I will leave unmodified !!!
 E.t. no pull request will be made, because I have changed too many things.
 
@@ -17,5 +17,5 @@ I will offer a PCB hardware design to test it.
 
 I will introduce new bugs.
 
-First bug: My version has slower floating point operations. Thus the control loop is close to take 100% of the CPU time, which is dangerous, because it's timer-driven, e.t. in IRQ. Resolution: to rewrite the control loop in integer. Not done yet.
+First bug: My version has slower floating point operations. Thus the control loop is close to take 100% of the CPU time, which is dangerous, because it's timer-driven, e.t. in IRQ. I had to rewrite the control loop in integer.
 
