@@ -344,24 +344,25 @@ int strncmp(const char *s1, const char *s2, size_t n)
 	return (*s1p - *s2p);
 }
 
-void *bsearch(const void *key, const void *base, size_t nmemb, size_t size,	int (*cmp)(const void *, const void *))
+//
+void *bsearch(const void *key, const void *base, size_t nmembers, size_t entry_size,	int (*cmp)(const void *, const void *))
 {
-	while (nmemb)
+	while (nmembers)
 	{
-		size_t mididx = nmemb / 2;
-		const char *midobj = (char *)base + mididx * size; // void pointers typed to char pointers, because used in arithmetic
+		size_t mididx = nmembers / 2;
+		const char *midobj = (char *)base + mididx * entry_size; // void pointers typed to char pointers, because used in arithmetic
 		int diff = cmp(key, midobj);
 
 		if (diff == 0)
-			return (void *) midobj;
+			return (void *) midobj; // found
 
 		if (diff > 0)
 		{
-			base = midobj + size;
-			nmemb -= mididx + 1;
+			base = midobj + entry_size;
+			nmembers -= mididx + 1;
 		}
 		else
-			nmemb = mididx;
+			nmembers = mididx;
 	}
 
 	return NULL;

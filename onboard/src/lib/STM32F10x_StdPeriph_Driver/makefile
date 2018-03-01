@@ -4,8 +4,8 @@ TARGET_ARCH = -mcpu=cortex-m3 -mthumb
 
 # Auto inline: The -finline-functions-called-once switch makes gcc to consider all 
 # static functions called once for inlining into their caller even if they are not marked inline.
-
-TARGET_OPTS = -O2 -finline -finline-functions-called-once
+# -flto - link time opt.
+TARGET_OPTS = -O2 -finline -finline-functions-called-once 
 WARNINGS = -Wall -W -Wshadow -Wwrite-strings -Winline
 INCLUDE_DIRS = -I inc -I ../../CPU_STM32 -I ../CMSIS_CM3 -I .
 # http://thiemonagel.de/2010/01/no-strict-aliasing/, http://blog.regehr.org/archives/1307 
@@ -15,6 +15,7 @@ INCLUDE_DIRS = -I inc -I ../../CPU_STM32 -I ../CMSIS_CM3 -I .
 F_NO_STRICT_ALIASING = -fno-strict-aliasing
 
 COMPILE_OPTS = $(WARNINGS) $(TARGET_OPTS) $(MESSAGES) $(F_NO_STRICT_ALIASING) $(INCLUDE_DIRS) $(DEFINES)
+
 # The following allow the linker later to optimize out the unused code as per
 # http://stackoverflow.com/questions/4274804/query-on-ffunction-section-fdata-sections-options-of-gcc
 # when linker called with -Wl,--gc-sections flags: 
@@ -27,7 +28,11 @@ CFLAGS = $(COMPILE_OPTS)
 AS = $(CC) -x assembler-with-cpp -c $(TARGET_ARCH)
 ASFLAGS = $(COMPILE_OPTS)
 
+# Choose one, which you have:
 AR = arm-none-eabi-ar
+# this one uses plugin to handle "-flto" optimization
+#  invokes 'arm-none-eabi-ar' with --plugin=/path../liblto_pluginxxxx.so
+#AR = arm-none-eabi-gcc-ar
 ARFLAGS = cr
 
 LIB_OUT = libstm32fw.a

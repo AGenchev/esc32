@@ -290,8 +290,7 @@ void cliFuncDuty(void *cmd, char *cmdLine)
 		}
 		else
 		{
-			sprintf(tempBuf, "Fet duty set to %.2f%%\r\n",
-					(float) fetDutyCycle / fetPeriod * 100.0f);
+			sprintf(tempBuf, "Fet duty set to %.2f%%\r\n", (float) fetDutyCycle / fetPeriod * 100.0f);
 			serialPrint(tempBuf);
 		}
 	}
@@ -521,7 +520,7 @@ void cliFuncSet(void *cmd, char *cmdLine)
 {
 	char param[32];
 	float value;
-	int i; // must be signed beacuse used also to get return value of a function
+	int i; // must be signed because used also to get return value of a function
 
 	if (sscanf(cmdLine, "%32s", param) != 1)
 	{
@@ -633,13 +632,17 @@ void cliFuncStatus(void *cmd, char *cmdLine)
 	serialPrint(tempBuf);
 
 	uint32_t Batt_mV = avg_BattmiliVolts; // sample
-	sprintf(tempBuf, formatFloat, "BAT VOLTS", avgBattVolts);
-	serialPrint(tempBuf);
+	//float fBatt_V	 = avgBattVolts; // sample
+	//sprintf(tempBuf, formatFloat, "BAT VOLTSf", fBatt_V);
+	//serialPrint(tempBuf);
 	sprintf(tempBuf,formatFP7P2, "BAT VOLTS" , Batt_mV/1000, (Batt_mV%1000+3)/10  );
 	serialPrint(tempBuf);
 
 
-	sprintf(tempBuf, formatFloat, "MOTOR VOLTS", avgBattVolts * duty);
+	//sprintf(tempBuf, formatFloat, "MOTOR VOLTSf", fBatt_V * duty);
+	//serialPrint(tempBuf);
+	Batt_mV = (Batt_mV * fetActualDutyCycle) / fetPeriod; // Calc motor milivolts
+	sprintf(tempBuf, formatFP7P2, "MOTOR VOLTS", Batt_mV/1000, (Batt_mV%1000)/10 );
 	serialPrint(tempBuf);
 
 #ifdef ESC_DEBUG
@@ -682,7 +685,7 @@ void cliFuncTelemetry(void *cmd, char *cmdLine)
 	{
 		if (freq > 0)
 		{
-			cliTelemetry = RUN_FREQ / freq;
+			cliTelemetry = RPM_PID_RUN_FREQ / freq;
 			serialPrint(cliHome);
 			serialPrint(cliClear);
 			serialWrite('\n');
@@ -698,11 +701,13 @@ void cliFuncVer(void *cmd, char *cmdLine)
 	serialPrint(tempBuf);
 }
 
+// 0-terminated buffer data passed as *c1, command from table is passed as *c2
 int cliCommandComp(const void *c1, const void *c2)
-{ // bsearch function used by the comparison implementation function
+{ // bsearch function uses this comparison implementation function
 	const cliCommand_t *cmd1 = c1, *cmd2 = c2;
 
-	return strncasecmp(cmd1->name, cmd2->name, strlen(cmd2->name));
+	return strncasecmp(cmd1->name, cmd2->name, strlen(cmd2->name)); 
+	// strlen call can be optimized out if we predefine command lengths
 }
 
 // According to the name parameter, find the corresponding array entry information from the cliCommandTable table
@@ -750,7 +755,7 @@ void cliCheck(void)
 		maxAmps = (adcMaxAmps - adcAmpsOffset) * adcToAmps;
 
 		serialPrint(cliHome);
-		sprintf(tempBuf, "Telemetry @ %d Hz\r\n\n", RUN_FREQ / cliTelemetry);
+		sprintf(tempBuf, "Telemetry @ %d Hz\r\n\n", RPM_PID_RUN_FREQ / cliTelemetry);
 		serialPrint(tempBuf);
 		cliFuncStatus(cmd, "");
 		serialPrint("\n> ");

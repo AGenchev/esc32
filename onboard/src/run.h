@@ -21,10 +21,10 @@
 
 #include "misc.h"
 
-#define RUN_FREQ		2000		    // PID run Freq, Hz
+#define RPM_PID_RUN_FREQ		2000		    // PID run Freq, Hz
 #define RUN_ARM_COUNT		20		    // number of valid PWM signals seen before arming
-#define RUN_MIN_MAX_CURRENT	0.0		    // Amps
-#define RUN_MAX_MAX_CURRENT	75.0		    // Amps
+#define RUN_MIN_MAX_CURRENT	0.0f		    // Amps
+#define RUN_MAX_MAX_CURRENT	75.0f		    // Amps
 
 //#define RUN_ENABLE_IWDG				// TODO: enable this in production state only
 #define RUN_LSI_FREQ		40000		    // 40 KHz LSI for IWDG
@@ -60,7 +60,7 @@ extern uint32_t U_idle_x100;// extern float idlePercent;
 
 extern float avgAmps, maxAmps;
 
-extern float avgBattVolts;
+//extern float avgBattVolts;
 extern uint32_t avg_BattmiliVolts;
 
 extern float rpm;

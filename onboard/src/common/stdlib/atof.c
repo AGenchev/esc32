@@ -4,6 +4,7 @@
 #include "stdint.h"
 #include "atof.h"
 
+// Source/author: open source. License: LGPL
 // Note: it's 32-bit float precision, artificially converted to double
 // formats supported: 1.0E-5, -1.0E6, 0.75, -.12, +1.00000e+00, 1.23456e+06
 // skips empty spaces

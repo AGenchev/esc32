@@ -53,7 +53,7 @@ extern uint16_t pwmHiValue;
 extern int16_t pwmMaxValue;
 extern int16_t pwmMinStart;
 extern volatile uint32_t pwmValidMicros;
-extern volatile uint16_t pwmValue;
+//extern volatile uint16_t pwmValue;
 
 extern void pwmInit(void);
 extern void pwmSetConstants(void);

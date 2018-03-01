@@ -220,7 +220,7 @@ void serialInit(void)
 	s->rxHead = s->rxTail = 0;
 	s->txHead = s->txTail = 0;
 
-	serialOpenPort(parameters_asUint32[BAUD_RATE]);
+	serialOpenPort(parameters_asUint32[uBAUD_RATE]);
 
 	// Configure DMA for rx
 	DMA_DeInit(SERIAL_RX_DMA_CHANNEL);
@@ -279,7 +279,7 @@ void DMA1_Channel4_IRQHandler(void)
 void serialCheckAndSetConstants(void)
 {
 	//parameters_asUint32[BAUD_RATE] = parameters_asUint32[BAUD_RATE];
-	if (parameters_asUint32[BAUD_RATE] < SERIAL_MIN_BAUD)		parameters_asUint32[BAUD_RATE] = SERIAL_MIN_BAUD;
-	else if (parameters_asUint32[BAUD_RATE] > SERIAL_MAX_BAUD)	parameters_asUint32[BAUD_RATE] = SERIAL_MAX_BAUD;
-	serialOpenPort(parameters_asUint32[BAUD_RATE]);
+	if (parameters_asUint32[uBAUD_RATE] < SERIAL_MIN_BAUD)		parameters_asUint32[uBAUD_RATE] = SERIAL_MIN_BAUD;
+	else if (parameters_asUint32[uBAUD_RATE] > SERIAL_MAX_BAUD)	parameters_asUint32[uBAUD_RATE] = SERIAL_MAX_BAUD;
+	serialOpenPort(parameters_asUint32[uBAUD_RATE]);
 }

@@ -75,7 +75,7 @@ const char *configParameterStrings[] = {
     "START_ALIGN_VOLTAGE",
     "START_STEPS_NUM",
     "START_STEPS_PERIOD",
-    "START_STEPS_ACCEL",
+    "uSTART_STEPS_ACCEL",
     "PWM_LOWPASS",
     "RPM_MEAS_LP",
     "SERVO_DUTY",
@@ -91,8 +91,8 @@ const char *configFormatStrings[] = {
     "%f",	    // CONFIG_VERSION
     "%u",	    // STARTUP_MODE
     "%u",    	// BAUD_RATE
-    "%.3f",	    // PTERM
-    "%.5f",	    // ITERM
+    "%u",	    // PTERM
+    "%u",	    // ITERM
     "%f",	    // FF1TERM
     "%f",	    // FF2TERM
     "%f",	    // CL1TERM
@@ -106,8 +106,8 @@ const char *configFormatStrings[] = {
     "%.0f us",	    // BLANKING_MICROS
     "%.2f Degs",    // ADVANCE
     "%.2f Volts",   // START_VOLTAGE
-    "%.0f",	    // GOOD_DETECTS_START
-    "%.0f",	    // BAD_DETECTS_DISARM
+    "%u",	    // GOOD_DETECTS_START
+    "%u",	    // BAD_DETECTS_DISARM
     "%.1f Amps",    // MAX_CURRENT
     "%.1f KHz",	    // SWITCH_FREQ
     "%u",	    // MOTOR_POLES
@@ -124,11 +124,11 @@ const char *configFormatStrings[] = {
     "%.2f",	    // INFAC
     "%f",	    // THR1TERM
     "%f",	    // THR2TERM
-    "%.0f ms",	    // START_ALIGN_TIME
+    "%u ms",	    // START_ALIGN_TIME
     "%.2f Volts",   // START_ALIGN_VOLTAGE
-    "%u",	    // START_STEPS_NUM
-    "%u us",	    // START_STEPS_PERIOD
-    "%u us",	    // START_STEPS_ACCEL
+    "%u",	    	// START_STEPS_NUM
+    "%u us",	    // uSTART_STEPS_PERIOD
+    "%u us",	    // uSTART_STEPS_ACCEL
     "%2.2f",	    // PWM_LOWPASS
     "%.3f",	    // RPM_MEAS_LP
     "%.1f %%",	    // SERVO_DUTY
@@ -144,8 +144,8 @@ const char configFormatTypes[CONFIG_NUM_PARAMS] =
 { 		'f',	    // CONFIG_VERSION
 	    'u',	    // STARTUP_MODE
 	    'u',    	// BAUD_RATE	-- converted everywhere to UINT. Works.
-	    'f',	    // PTERM
-	    'f',	    // ITERM
+	    'u',	    // PTERM
+	    'u',	    // ITERM
 	    'f',	    // FF1TERM
 	    'f',	    // FF2TERM
 	    'f',	    // CL1TERM
@@ -159,8 +159,8 @@ const char configFormatTypes[CONFIG_NUM_PARAMS] =
 	    'f',	    // BLANKING_MICROS. Should be 'u', but ...
 	    'f',    	// ADVANCE 0.1 .. 30.0
 	    'f',   		// START_VOLTAGE
-	    'f',	    // GOOD_DETECTS_START - should be UINT
-	    'f',	    // BAD_DETECTS_DISARM - should be UINT
+	    'u',	    // uGOOD_DETECTS_START
+	    'u',	    // uBAD_DETECTS_DISARM
 	    'f',    	// MAX_CURRENT		  - should be UINT
 	    'f',	    // SWITCH_FREQ		  - should be UINT
 	    'u',	    // MOTOR_POLES
@@ -180,7 +180,7 @@ const char configFormatTypes[CONFIG_NUM_PARAMS] =
 	    'u',	    // START_ALIGN_TIME -- converted everywhere.
 	    'f',   		// START_ALIGN_VOLTAGE, V
 	    'u',	    // START_STEPS_NUM  -- converted everywhere.
-	    'u',	    // START_STEPS_PERIOD
+	    'u',	    // uSTART_STEPS_PERIOD
 	    'u',	    // START_STEPS_ACCEL
 	    'f',	    // PWM_LOWPASS
 	    'f',	    // RPM_MEAS_LP
@@ -205,9 +205,9 @@ void configInit(void)
 
 	if (isnan(ver)) // Check ver data: if ver is NAN, (value is 0xffffffff), then it is invalid -> write valid data to the flash
 		configWriteFlash();
-	else if (ver >= parameters_asFloat32[CONFIG_VERSION])
+	else if (ver >= parameters_asFloat32[fCONFIG_VERSION])
 		configReadFlash();
-	else if (parameters_asFloat32[CONFIG_VERSION] > ver)
+	else if (parameters_asFloat32[fCONFIG_VERSION] > ver)
 		configWriteFlash();
 }
 
@@ -295,11 +295,11 @@ int configGetId(char *param)
 
 void configLoadDefault(void)
 {
-	parameters_asFloat32[CONFIG_VERSION] = DEFAULT_CONFIG_VERSION;
-	parameters_asUint32[STARTUP_MODE] = DEFAULT_STARTUP_MODE;
-	parameters_asUint32[BAUD_RATE] = DEFAULT_BAUD_RATE;
-	parameters_asFloat32[PTERM] = DEFAULT_PTERM;
-	parameters_asFloat32[ITERM] = DEFAULT_ITERM;
+	parameters_asFloat32[fCONFIG_VERSION] = DEFAULT_CONFIG_VERSION;
+	parameters_asUint32[uSTARTUP_MODE] = DEFAULT_STARTUP_MODE;
+	parameters_asUint32[uBAUD_RATE] = DEFAULT_BAUD_RATE;
+	parameters_asUint32[uPTERM] =  DEFAULT_rpmPID_P_TERM;
+	parameters_asUint32[uITERM] =  DEFAULT_rpmPID_I_TERM;
 	parameters_asFloat32[FF1TERM] = DEFAULT_FF1TERM;
 	parameters_asFloat32[FF2TERM] = DEFAULT_FF2TERM;
 	parameters_asFloat32[CL1TERM] = DEFAULT_CL1TERM;
@@ -308,43 +308,43 @@ void configLoadDefault(void)
 	parameters_asFloat32[CL4TERM] = DEFAULT_CL4TERM;
 	parameters_asFloat32[CL5TERM] = DEFAULT_CL5TERM;
 	parameters_asUint32[SHUNT_RESISTANCE_MILIOHM] = DEFAULT_SHUNT_RESISTANCE_mOhm;
-	parameters_asFloat32[MIN_PERIOD] = DEFAULT_MIN_PERIOD;
-	parameters_asFloat32[MAX_PERIOD] = DEFAULT_MAX_PERIOD;
-	parameters_asFloat32[BLANKING_MICROS] = DEFAULT_BLANKING_MICROS;
+	parameters_asFloat32[fMIN_PERIOD] = DEFAULT_MIN_PERIOD;
+	parameters_asFloat32[fMAX_PERIOD] = DEFAULT_MAX_PERIOD;
+	parameters_asFloat32[fBLANKING_MICROS] = DEFAULT_BLANKING_MICROS;
 	parameters_asFloat32[ADVANCE] = DEFAULT_ADVANCE;	// leave this floating point. It's not included in real-time calculations
-	parameters_asFloat32[START_VOLTAGE] = DEFAULT_START_VOLTAGE;
-	parameters_asFloat32[GOOD_DETECTS_START] = DEFAULT_GOOD_DETECTS_START;
-	parameters_asFloat32[BAD_DETECTS_DISARM] = DEFAULT_BAD_DETECTS_DISARM;
-	parameters_asFloat32[MAX_CURRENT] = DEFAULT_MAX_CURRENT;
-	parameters_asFloat32[SWITCH_FREQ] = DEFAULT_SWITCH_FREQ;
-	parameters_asUint32[MOTOR_POLES] = DEFAULT_MOTOR_POLES;
-	parameters_asUint32[PWM_MIN_PERIOD] = DEFAULT_PWM_MIN_PERIOD; // PWM timer1 ch1 minimum cycle
-	parameters_asUint32[PWM_MAX_PERIOD] = DEFAULT_PWM_MAX_PERIOD; // PWM timer1 ch1 maximum cycle
-	parameters_asUint32[PWM_MIN_VALUE] = DEFAULT_PWM_MIN_VALUE;   // PWM timer1 ch2 minimum cycle
-	parameters_asUint32[PWM_LO_VALUE] = DEFAULT_PWM_LO_VALUE;
-	parameters_asUint32[PWM_HI_VALUE] = DEFAULT_PWM_HI_VALUE;
-	parameters_asUint32[PWM_MAX_VALUE] = DEFAULT_PWM_MAX_VALUE;   // PWM timer1 ch2 maximum cycle
-	parameters_asUint32[PWM_MIN_START] = DEFAULT_PWM_MIN_START;
-	parameters_asUint32[PWM_RPM_SCALE] = DEFAULT_PWM_RPM_SCALE;  // PWM <--> RPM proportion
-	parameters_asUint32[FET_BRAKING] = DEFAULT_FET_BRAKING; // 1 == ON - Enables the brake mode, == 0 does not allow braking
+	parameters_asFloat32[fSTART_VOLTAGE] = DEFAULT_START_VOLTAGE;
+	parameters_asUint32[uGOOD_DETECTS_START] = DEFAULT_N_GOOD_DETECTS_START;
+	parameters_asUint32[uBAD_DETECTS_DISARM] = DEFAULT_N_BAD_DETECTS_DISARM;
+	parameters_asFloat32[fMAX_CURRENT] = DEFAULT_MAX_CURRENT;
+	parameters_asUint32[uSWITCH_FREQ] = DEFAULT_FET_PWM_SWITCH_FREQ_KHZ;
+	parameters_asUint32[uMOTOR_POLES] = DEFAULT_MOTOR_POLES;
+	parameters_asUint32[PWM_INTF_MIN_PERIOD] = DEFAULT_PWM_INTF_MIN_PERIOD; // PWM timer1 ch1 minimum cycle
+	parameters_asUint32[PWM_INTF_MAX_PERIOD] = DEFAULT_PWM_INTF_MAX_PERIOD; // PWM timer1 ch1 maximum cycle
+	parameters_asUint32[PWM_INTF_MIN_VALUE] = DEFAULT_PWM_INTF_MIN_VALUE;   // PWM timer1 ch2 minimum cycle
+	parameters_asUint32[PWM_INTF_LO_VALUE] = DEFAULT_PWM_INTF_LO_VALUE;
+	parameters_asUint32[PWM_INTF_HI_VALUE] = DEFAULT_PWM_INTF_HI_VALUE;
+	parameters_asUint32[PWM_INTF_MAX_VALUE] = DEFAULT_PWM_INTF_MAX_VALUE;   // PWM timer1 ch2 maximum cycle
+	parameters_asUint32[PWM_INTF_MIN_START] = DEFAULT_PWM_INTF_MIN_START;
+	parameters_asUint32[PWM_INTF_RPM_SCALE] = DEFAULT_PWM_INTF_RPM_SCALE;  // PWM <--> RPM proportion
+	parameters_asUint32[uFET_BRAKING] = DEFAULT_FET_BRAKING; // 1 == ON - Enables the brake mode, == 0 does not allow braking
 	parameters_asFloat32[PNFAC] = DEFAULT_PNFAC;
 	parameters_asFloat32[INFAC] = DEFAULT_INFAC;
 	parameters_asFloat32[THR1TERM] = DEFAULT_THR1TERM;
 	parameters_asFloat32[THR2TERM] = DEFAULT_THR2TERM;
-	parameters_asUint32[START_ALIGN_TIME] = DEFAULT_START_ALIGN_TIME; // -- converted everywhere to Uint. Works.
+	parameters_asUint32[uSTART_ALIGN_TIME] = DEFAULT_START_ALIGN_TIME; // -- converted everywhere to Uint. Works.
 	parameters_asFloat32[START_ALIGN_VOLTAGE] = DEFAULT_START_ALIGN_VOLTAGE;
-	parameters_asUint32[START_STEPS_NUM] = DEFAULT_START_STEPS_NUM;   // -- converted everywhere to Uint. Works.
-	parameters_asUint32[START_STEPS_PERIOD] = DEFAULT_START_STEPS_PERIOD;
-	parameters_asUint32[START_STEPS_ACCEL] = DEFAULT_START_STEPS_ACCEL;
-	parameters_asFloat32[PWM_LOWPASS] = DEFAULT_PWM_LOWPASS;
-	parameters_asFloat32[RPM_MEAS_LP] = DEFAULT_RPM_MEAS_LP;
-	parameters_asFloat32[SERVO_DUTY] = DEFAULT_SERVO_DUTY;
-	parameters_asFloat32[SERVO_P] = DEFAULT_SERVO_P;        // Servo mode PID  P parameter. TODO: convert to UINT, scale float w 0x1000
-	parameters_asFloat32[SERVO_D] = DEFAULT_SERVO_D;        // Servo mode PID  D parameter  TODO: convert to UINT, scale float w 0x1000
-	parameters_asFloat32[SERVO_MAX_RATE] = DEFAULT_SERVO_MAX_RATE;
-	parameters_asFloat32[SERVO_SCALE] = DEFAULT_SERVO_SCALE;
-	parameters_asUint32[ESC_ID] = DEFAULT_ESC_ID;					// -- converted everywhere to UINT. Works.
-	parameters_asSint32[DIRECTION] = DEFAULT_DIRECTION;				// -- converted everywhere to INT. Works.
+	parameters_asUint32[uSTART_STEPS_NUM] = DEFAULT_START_STEPS_NUM;   // -- converted everywhere to Uint. Works.
+	parameters_asUint32[uSTART_STEPS_PERIOD] = DEFAULT_START_STEPS_PERIOD; // time in us between steps
+	parameters_asUint32[uSTART_STEPS_ACCEL] = DEFAULT_START_STEPS_ACCEL;
+	parameters_asFloat32[fPWM_INTF_LOWPASS] = DEFAULT_PWM_INTF_LOWPASS;
+	parameters_asFloat32[fRPM_INTF_MEAS_LP] = DEFAULT_RPM_INTF_MEAS_LP;
+	parameters_asFloat32[fSERVO_DUTY] = DEFAULT_SERVO_DUTY;
+	parameters_asFloat32[fSERVO_P] = DEFAULT_SERVO_P;        // Servo mode PID  P parameter. TODO: convert to UINT, scale float w 0x1000
+	parameters_asFloat32[fSERVO_D] = DEFAULT_SERVO_D;        // Servo mode PID  D parameter  TODO: convert to UINT, scale float w 0x1000
+	parameters_asFloat32[fSERVO_MAX_RATE] = DEFAULT_SERVO_MAX_RATE;
+	parameters_asFloat32[fSERVO_SCALE] = DEFAULT_SERVO_SCALE;
+	parameters_asUint32[uESC_ID] = DEFAULT_ESC_ID;					// -- converted everywhere to UINT. Works.
+	parameters_asSint32[iDIRECTION] = DEFAULT_DIRECTION;				// -- converted everywhere to INT. Works.
 
 	configRecalcConst();
 }

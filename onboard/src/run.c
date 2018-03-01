@@ -39,17 +39,18 @@ uint32_t U_idle_x100;		// percentage of free time in the main loop. DONE: conver
 
 float avgAmps, maxAmps;     // Average current, maximum current. TODO: Convert to micro amps 100A = 100*1.0E6 uA, within uint32 range
 
-float avgBattVolts;				// Average VBatt voltage, sampled by ADC, then converted to Volts. TODO: Convert to integer dimension [milivolts] to opt out FLOPS
+// float avgBattVolts;				// Average VBatt voltage, sampled by ADC, then converted to Volts. TODO: Convert to integer dimension [milivolts] to opt out FLOPS
 //uint32_t avg_uVolts;		// Average VBatt voltage, sampled by ADC, then converted to uVolts @ SystickHandler
 uint32_t avg_BattmiliVolts;		// Average VBatt voltage, sampled by ADC, then converted to mVolts @ SystickHandler
 
 
 float rpm;                 // The current speed in RPM. The measured value is calculated in the runRpm function and is used in runThrotLim.
 uint32_t targetRpm;        // was float. target speed setting (we use this variable only in closed loop or closed loop thrust mode)
-float rpmI;				   // This is the integrator's "tank" variable.
-float rpmPTerm, rpmITerm;  // P & I terms for the PI regulator
-float runRPMFactor;		   //
-float runRpmLPF;
+// float rpmI;				   // This is the integrator's "tank" variable.
+static int32_t rpmPID_integral;  // integer RPM PI regulator integrator's "tank" variable
+int32_t rpmPID_P_Coeff, rpmPID_I_Coeff;  // P & I coefficients for the PI regulator
+float runRPMFactor;		   // WTF?
+float runRpmLPF;			// filter coefficient
 float maxCurrentSQRT;
 escDisarmReasons_t disarmReason;
 uint8_t commandMode;      // serial communication mode ascii or binary
@@ -57,6 +58,8 @@ uint8_t runArmCount;
 volatile runModes_t runMode; // Run mode (open loop mode, RPM mode, thrust mode, servo mode)
 uint8_t escId;
 float maxThrust;
+
+int32_t run_PI_i16_32(int32_t rpm_Current, int32_t rpm_Target); // forward decl
 
 void runFeedIWDG(void)
 {
@@ -161,13 +164,13 @@ void runStart(void)
 		// reset integral before new motor startup
 		runRpmPIDReset();
 
-		if ((parameters_asUint32[START_ALIGN_TIME] == 0) && (parameters_asUint32[START_STEPS_NUM] == 0))
-		{
-			ESC_state = 3;// ESC_STATE_STARTING;
+		if ((parameters_asUint32[uSTART_ALIGN_TIME] == 0) && (parameters_asUint32[uSTART_STEPS_NUM] == 0))
+		{ // default start sequence
+			ESC_state = ESC_STATE_STARTING;// ESC_STATE_STARTING;
 			fetStartCommutation(0);
 		}
 		else
-		{
+		{ // follow the configuration
 			motorStartSeqInit();
 		}
 	}
@@ -210,10 +213,10 @@ void runSetpoint(uint16_t val)
 		else if (runMode == CLOSED_LOOP_RPM)
 		{
 			// target RPM
-			target = parameters_asUint32[PWM_RPM_SCALE] * val * (1.0f / ((1 << 16) - 1));
+			target = parameters_asUint32[PWM_INTF_RPM_SCALE] * val * (1.0f / ((1 << 16) - 1));
 
 			// limit to configured maximum
-			targetRpm =	(target > parameters_asUint32[PWM_RPM_SCALE]) ?	parameters_asUint32[PWM_RPM_SCALE] : target;
+			targetRpm =	(target > parameters_asUint32[PWM_INTF_RPM_SCALE]) ?	parameters_asUint32[PWM_INTF_RPM_SCALE] : target;
 		}
 		else if (runMode == CLOSED_LOOP_THRUST)
 		{
@@ -224,7 +227,7 @@ void runSetpoint(uint16_t val)
 			target = ((sqrtf(parameters_asFloat32[THR1TERM] * parameters_asFloat32[THR1TERM] + 4.0f * parameters_asFloat32[THR2TERM] * target)
 					- parameters_asFloat32[THR1TERM]) / (2.0f * parameters_asFloat32[THR2TERM]));
 
-			targetRpm =	(target > parameters_asUint32[PWM_RPM_SCALE]) ?	parameters_asUint32[PWM_RPM_SCALE] : target;
+			targetRpm =	(target > parameters_asUint32[PWM_INTF_RPM_SCALE]) ?	parameters_asUint32[PWM_INTF_RPM_SCALE] : target;
 		}
 	}
 	else if (ESC_state == ESC_STATE_STOPPED && val > 0)
@@ -242,9 +245,9 @@ void runNewInput(uint16_t setpoint)
 
 	// Lowpass Input if configured
 	// TODO: Make lowpass independent from pwm update rate
-	if (parameters_asFloat32[PWM_LOWPASS])
+	if (parameters_asFloat32[fPWM_INTF_LOWPASS])
 	{
-		filteredSetpoint = (parameters_asFloat32[PWM_LOWPASS] * filteredSetpoint + (float) setpoint) / (1.0f + parameters_asFloat32[PWM_LOWPASS]);
+		filteredSetpoint = (parameters_asFloat32[fPWM_INTF_LOWPASS] * filteredSetpoint + (float) setpoint) / (1.0f + parameters_asFloat32[fPWM_INTF_LOWPASS]);
 		setpoint = filteredSetpoint;
 	}
 
@@ -257,10 +260,10 @@ void runNewInput(uint16_t setpoint)
 		}
 		else if (runMode == CLOSED_LOOP_RPM)
 		{
-			float target = parameters_asUint32[PWM_RPM_SCALE] * (setpoint - pwmLoValue) / (pwmHiValue - pwmLoValue);
+			float target = parameters_asUint32[PWM_INTF_RPM_SCALE] * (setpoint - pwmLoValue) / (pwmHiValue - pwmLoValue);
 
 			// limit to configured maximum
-			targetRpm =	(target > parameters_asUint32[PWM_RPM_SCALE]) ?	parameters_asUint32[PWM_RPM_SCALE] : target;
+			targetRpm =	(target > parameters_asUint32[PWM_INTF_RPM_SCALE]) ?	parameters_asUint32[PWM_INTF_RPM_SCALE] : target;
 		}
 		// THRUST Mode
 		else if (runMode == CLOSED_LOOP_THRUST)
@@ -291,7 +294,7 @@ void runNewInput(uint16_t setpoint)
 			}
 
 			// upper limit for targetRpm is configured maximum PWM_RPM_SCALE (which is MAX_RPM)
-			targetRpm =	(target > parameters_asUint32[PWM_RPM_SCALE]) ?	parameters_asUint32[PWM_RPM_SCALE] : target;
+			targetRpm =	(target > parameters_asUint32[PWM_INTF_RPM_SCALE]) ?	parameters_asUint32[PWM_INTF_RPM_SCALE] : target;
 		}
 		else if (runMode == SERVO_MODE)
 		{
@@ -333,13 +336,13 @@ static inline void run_Monitor(void)
 	register uint32_t t, d;
 	__disable_irq();        //__asm volatile ("cpsid i");
 	t = timerMicros;
-	d = detectedCrossing;
+	d = detectedCrossing;   // recorded crossing time
 #ifdef ENABLE_PWM_PROTOCOL
 	register uint32_t pwm_Proto_Valid_us = pwmValidMicros;
 #endif   // ENABLE_PWM_PROTOCOL
 	__enable_irq();        //__asm volatile ("cpsie i");
 
-	if (ESC_state == ESC_STATE_STARTING && fetGoodDetects > fetStartDetects)
+	if (ESC_state == ESC_STATE_STARTING && (fetGoodDetects > fetStartDetects) )
 	{
 		ESC_state = ESC_STATE_RUNNING;
 		GPIO_SetBits(GPIO_STATUS_LED_PORT, GPIO_STATUS_LED_PIN); //digitalHi(statusLed);   // turn off
@@ -394,7 +397,7 @@ static inline void run_Monitor(void)
 			adcAmpsOffset = adcAvgAmps_ShuntVoltage;	// record current amperage offset
 		}
 	}
-	else if (ESC_state == ESC_STATE_DISARMED && !(runCount % (RUN_FREQ / 10))) // 2000 / 200 == 10, so with 10 FPS rate
+	else if (ESC_state == ESC_STATE_DISARMED && !(runCount % (RPM_PID_RUN_FREQ / 10))) // 2000 / 200 == 10, so with 10 FPS rate
 	{ // we update the adcAmpsOffset & toggle the LED
 		adcAmpsOffset = adcAvgAmps_ShuntVoltage;	// record current amperage offset
 		GPIO_TogglePins(GPIO_ERROR_LED_PORT, GPIO_ERROR_LED_PIN); //digitalTogg(errorLed);
@@ -404,14 +407,17 @@ static inline void run_Monitor(void)
 
 void runRpmPIDReset(void)
 {
-	rpmI = 0.0f; // reset integrator tank
+	//rpmI = 0.0f; // reset integrator tank
+	rpmPID_integral = 0;
 }
 
+/*
 // called by runRPM(),  2000 times per second @ systick timer IRQ
 // calculation of PID: rpm - the measured speed value; target - the target speed value
 // result: Direct FET duty cycle in dimension of fetPeriod = FET_AHB_FREQ/fetSwitchFreq
 // e.t. from 0 to fetPeriod
 // for 20 kHz: fetPeriod  = (SystemCoreClock/2) / fetSwitchFreq	= 36Mhz/20kHz = 1800
+// We keep it in fetPeriod variable
 static inline int32_t runRpmPID(float rpm, float target)
 {
 	float error;
@@ -424,7 +430,7 @@ static inline int32_t runRpmPID(float rpm, float target)
 
 	error = (target - rpm);
 
-	if (error > 500) error = 500; // limits d_Duty/dt Original was: if (error > 1000.0f) error = 1000.0f;
+	if (error > 500) error = 500; // this limits d_Duty/dt Original was: if (error > 1000.0f) error = 1000.0f;
 
 	if (error > 0.0f)
 	{
@@ -438,7 +444,7 @@ static inline int32_t runRpmPID(float rpm, float target)
 	}
 
 	if (fetBrakingEnabled)
-	{
+	{ // we use Bill's braking code *only* to decrease speed, only if RPM >= 300 and only if ABS(error) > 100 RPM.
 		if (rpm < 300.0f)
 		{
 			fetSetBraking(0);
@@ -466,6 +472,124 @@ static inline int32_t runRpmPID(float rpm, float target)
 
 
 	return output;
+} */
+
+
+// integer math PI regulator
+// Literature: https://www.embeddedrelated.com/showarticle/123.php
+// called by runRPM(),  2000 times per second @ systick timer IRQ
+// calculation of PID: rpm - the measured speed value; target - the target speed value
+// result: Direct FET duty cycle in dimension of fetPeriod = FET_AHB_FREQ/fetSwitchFreq
+// e.t. from 0 to fetPeriod
+// for 20 kHz: fetPeriod  = (SystemCoreClock/2) / fetSwitchFreq	= 36Mhz/20kHz = 1800
+// We keep it in fetPeriod variable
+//	Tuning:
+/*  https://www.crossco.com/blog/basics-tuning-pid-loops
+ * intuitive iterative approach:
+    Start with a low proportional and no integral or derivative.
+    Double the proportional until it begins to oscillate, then halve it.
+    Implement a small integral.
+    Double the integral until it starts oscillating, then halve it.
+	That will get the constants close to where they need to be for fine adjustment.
+	Don’t hesitate to put the loop back in manual if the loop goes crazy or while studying the trend.
+ */
+
+
+int32_t run_PI_i16_32(int32_t rpm_Current, int32_t rpm_Target)
+{
+	int SpeedError;
+	int duty;
+	// int16_t sat_flag=0;
+	int p_term;
+	int KpXSpeedError; // KpXe = Kp * SpeedError
+	// with these parameters, there is no overshoot
+	//const int16_t Kp = 2048;
+	//const int16_t Ki2 = 3; // Ki2 -
+
+	//const int16_t Kp = 4096; // rpmPID_P_Coeff
+	//const int16_t Ki2 = 3; // Ki2 -
+	#define PID_PFBits  15 // controls proportional gain scaling, example: 1024 >> 15 = 1024 / 2^15 = 1024 / 32768 = 0.03125
+	// control (Duty? Power?) margins:
+	#define  x_min16    0
+	const int16_t x_max16 = fetPeriod; // fetPeriod, typ. 1800
+	static const int32_t nmin = -(1 << (15 + PID_PFBits));
+	static const int32_t nmax = +(1 << (15 + PID_PFBits)) - 1; // 1073741823
+	static const int32_t x_min32 = -((int32_t) x_min16) << 16; // shifted values
+	       const int32_t x_max32 = +((int32_t) x_max16) << 16;  // typ.117964800
+	//printf("Time\t Speed\t Duty\n");
+
+	SpeedError = rpm_Target - rpm_Current;		// typ. Max error = +10000, nmax limit allows MAX_rpmPID_P_Coeff == 107374 when error = 10000
+	/* it seems that the sat_flag is not necesssary
+	 if ((sat_flag < 0 && SpeedError < 0) || (sat_flag > 0 && SpeedError > 0))
+	 {
+	 // do nothing if there is saturation, and error is in the same direction;
+	 // if you're careful you can implement as "if (sat*e > 0)"
+	 }
+	 else
+	 */
+	rpmPID_integral = rpmPID_integral + rpmPID_I_Coeff * SpeedError;
+
+	/* satlimit(x, min, max) does the following:
+	 * if x is between min and max, return (x,0)
+	 * if x < min, return (min, -1)
+	 * if x > max, return (max, +1)
+	 *
+	 * limit(x, min, max) does the following:
+	 * if x is between min and max, return x
+	 * if x < min, return min
+	 * if x > max, return max
+	 */
+	// (x_integral,sat) = satlimit(x_integral, x_min32, x_max32);
+	KpXSpeedError = (int32_t) rpmPID_P_Coeff * SpeedError; // calculate P-term
+	// limit the x_integral magnitude:
+	if (rpmPID_integral < x_min32)
+	{
+		rpmPID_integral = x_min32;
+		//sat_flag = -1;
+	}
+	else if (rpmPID_integral > x_max32)
+	{
+		rpmPID_integral = x_max32;
+		//sat_flag = +1;
+	}
+	else
+	{ // no saturation
+		// x_integral  = x_integral;
+		//sat_flag = 0;
+	}
+	// p_term = limit((int32)Kp*e, nmin, nmax);
+	if (KpXSpeedError < nmin)
+		p_term = nmin;
+	else if (KpXSpeedError > nmax)
+		p_term = nmax;
+	else
+		p_term = KpXSpeedError;
+	duty = (p_term >> PID_PFBits) + (rpmPID_integral >> 16); // why duty preserves it's negative sign when shifted ?
+	// impose limits: x = limit((p_term >> N) + (x_integral >> 16), x_min16, x_max16);
+	if (duty < x_min16)
+		duty = x_min16;
+	else if (duty > x_max16)
+		duty = x_max16;
+	else
+		duty = duty;
+
+	if (fetBrakingEnabled)
+	{ // we use Bill's braking code *only* to decrease speed, only if RPM >= 300 and only if ABS(error) > 100 RPM.
+		if (rpm_Current < 300)
+		{
+			fetSetBraking(0);
+		}
+		else if (SpeedError <= -100)
+		{
+			fetSetBraking(1);
+		}
+		else if (fetBrakingStatus && SpeedError > -25)
+		{
+			fetSetBraking(0);
+		}
+	}
+
+	return duty;
 }
 
 /*
@@ -532,7 +656,7 @@ static inline uint32_t runRpmPI_fastfixed1(uint32_t rpm_Current,	uint32_t rpm_Ta
 */
 
 // Another: http://www.ledin.com/integer-algorithms-implementation-and-issues/
-
+/*
 static inline uint32_t runRpmPID_UINT(uint32_t rpm_Current, uint32_t rpm_Target) // UINT implementation
 {
 	int32_t error;
@@ -586,11 +710,11 @@ static inline uint32_t runRpmPID_UINT(uint32_t rpm_Current, uint32_t rpm_Target)
 	 }
 
 	return output;
-}
+}*/
 
 // calculate the motor speed, calculate the PID output value according to the current speed and set the duty cycle
 // called 2000 times per second @ systick timer
-static inline uint8_t runRpm(void)
+static inline void runRpm(void)
 {
 	if (ESC_state > ESC_STATE_STARTING)
 	{ // ESC_STATE_RUNNING
@@ -600,33 +724,35 @@ static inline uint8_t runRpm(void)
 
 //  rpm are calculated with low-pass filter applied:
 //	rpm = (rpm + ((32768.0f * runRPMFactor) / (float)adcCrossingPeriod)) * 0.5f; // increased resolution, fixed filter here
-		rpm = runRpmLPF * rpm + ((32768.0f * runRPMFactor) / (float) adcCrossingPeriod)	* (1.0f - runRpmLPF); // increased resolution, variable filter here
-
+	rpm = runRpmLPF * rpm + ((32768.0f * runRPMFactor) / (float) adcCrossingPeriod)	* (1.0f - runRpmLPF); // increased resolution, variable filter here
+		//rpm = (int)((int)rpm  + ((32768 * (int64_t)i_runRPMFactor) / adcCrossingPeriod)) >> 1;
 		// run closed loop control
-		if (runMode == CLOSED_LOOP_RPM)
+	if (runMode == CLOSED_LOOP_RPM)
 		{
 			//fetSetDutyCycle(runRpmPID(rpm, targetRpm));
  // We skip steps, because else STM32F103C8T6 gets loaded 100% and bad things (e.g. main thread hangs) happen.
  // Unfortunately, skipping steps causes FET braking experimental feature to behave badly.
-			if( runCount & 1) fetSetDutyCycle(runRpmPID(rpm, targetRpm)); // runRpmPI_fastfixed1() runRpmPID()
+			//if( runCount & 1) fetSetDutyCycle(runRpmPID(rpm, targetRpm)); // runRpmPI_fastfixed1() runRpmPID()
+			fetSetDutyCycle(run_PI_i16_32(rpm, targetRpm)); // runRpmPI_fastfixed1() runRpmPID()
 			//fetSetDutyCycle(runRpmPID_UINT(rpm, targetRpm));
-			return 1;
+			//return 1;
 		}
 		// run closed loop control also for THRUST mode
 		else if (runMode == CLOSED_LOOP_THRUST)
 		{
-			fetSetDutyCycle(runRpmPID(rpm, targetRpm));
-			return 1;
+			//Float, works O.K.: fetSetDutyCycle(runRpmPID(rpm, targetRpm));
+			fetSetDutyCycle(run_PI_i16_32(rpm, targetRpm));
+			//return 1;
 		}
 		else
 		{
-			return 0;
+			//return 0;
 		}
 	}
 	else
 	{
 		rpm = 0.0f;
-		return 0;
+		//return 0;
 	}
 }
 
@@ -666,16 +792,16 @@ void runInit(void)
 {
 	runSetupPVD();
 	runCheckAndSetConstants();
-	runMode = parameters_asUint32[STARTUP_MODE];
+	runMode = parameters_asUint32[uSTARTUP_MODE];
 
-	SysTick_Config(SystemCoreClock / RUN_FREQ); // Number of ticks bw 2 interrupts, so we get 2 kHz Systick timer
-	NVIC_SetPriority(SysTick_IRQn, 2);	    // lower priority
+	SysTick_Config(SystemCoreClock / RPM_PID_RUN_FREQ); // Number of ticks bw 2 interrupts, so we get 2 kHz Systick timer
+	NVIC_SetPriority(SysTick_IRQn, 2);	    // lower priority, most important is commutation timer IRQ
 
 	// setup hardware watchdog
 	runIWDGInit(20);
 }
 
-#define RUN_CURRENT_ITERM	(1.0f * 1000.0f / RUN_FREQ)
+#define RUN_CURRENT_ITERM	(1.0f * 1000.0f / RPM_PID_RUN_FREQ)
 #define RUN_CURRENT_PTERM	10.0f
 #define RUN_MAX_DUTY_INCREASE	1.0f
 
@@ -687,7 +813,7 @@ static inline int32_t runCurrentPID(int32_t duty)
 	float error;
 	float pTerm, iTerm;
 
-	error = avgAmps - parameters_asFloat32[MAX_CURRENT];
+	error = avgAmps - parameters_asFloat32[fMAX_CURRENT];
 
 	currentIState += error;
 	if (currentIState < 0.0f)
@@ -709,6 +835,7 @@ static inline int32_t runCurrentPID(int32_t duty)
 
 static inline void runThrotLim(uint32_t duty)
 {
+	/*
 	float maxVolts; // max allowed Volts
 	uint32_t maxDuty;
 
@@ -744,6 +871,14 @@ static inline void runThrotLim(uint32_t duty)
 	}
 
 	fetApplyDutyCycle(fetActualDutyCycle);
+	*/
+
+	// by-pass code:
+	const uint32_t MaxDutyIncrease = 1;
+	fetActualDutyCycle += (fetPeriod * MaxDutyIncrease) / 100;
+	if (fetActualDutyCycle > duty)  fetActualDutyCycle = duty;
+
+	fetApplyDutyCycle(fetActualDutyCycle);
 }
 
 
@@ -753,11 +888,8 @@ void SysTick_Handler(void) // rate was set to 2 KHz
 {
 	// reload the hardware watchdog
 	runFeedIWDG();
-#ifdef ENABLE_CANBUS_PROTOCOL
-	canProcess(); // TODO: Shouldn't this run in the main thread ?
-#endif // ENABLE_CANBUS_PROTOCOL
-	register uint32_t _SAvgVolts = adcAvgVolts_x0x65536; // sample the volatile
-	avgBattVolts = _SAvgVolts * ADC_TO_VOLTS; // convert the ADC scaled battery voltage (typically 12V)
+	register uint32_t _SAvgVolts = adcAvgVolts_x0x65536; // sample the volatile var
+	// avgBattVolts = _SAvgVolts * ADC_TO_VOLTS; // convert the ADC scaled battery voltage (typically 12V)
 	// avg_nVolts = adcBattValToNanoVolts(_SAvgVolts /65536); // convert the ADC scaled battery voltage (typically 12V) to nV. adcAvgVolts is scaled by 65537
 	avg_BattmiliVolts = adcBattValToMiliVolts_comp( _SAvgVolts / 65536 );
 
@@ -773,10 +905,11 @@ void SysTick_Handler(void) // rate was set to 2 KHz
 		runRpm();      // Calculate RPM, calculate PID, sets run PWM duty cycle
 		runThrotLim(fetDutyCycle); // Limit & apply FET duty
 	}
+
 	// Calculate the percentage of free time to send to the host computer via the serial port
-	if (!(runCount % (10 * 1000 / RUN_FREQ))) // each 5 runs
+	if (!(runCount % (10 * 1000 / RPM_PID_RUN_FREQ))) // each 5 runs
 	{// DONE: optimized floating point op:  idlePercent = 100.0f * (idleCounter - oldIdleCounter) / (SystemCoreClock * 10 / RUN_FREQ / minCycles);
-		U_idle_x100 = 10000 * (idleCounter - oldIdleCounter) / (SystemCoreClock * 10 / RUN_FREQ / minCycles); // this squeezed only +1% idle
+		U_idle_x100 = 10000 * (idleCounter - oldIdleCounter) / (SystemCoreClock * 10 / RPM_PID_RUN_FREQ / minCycles); // this squeezed only +1% idle
 		oldIdleCounter = idleCounter;
 		totalCycles = 0;
 	}
@@ -803,10 +936,10 @@ void PVD_IRQHandler(void)
 
 void runCheckAndSetConstants(void)
 {
-	int32_t startupMode = parameters_asUint32[STARTUP_MODE];
-	float maxCurrent = parameters_asFloat32[MAX_CURRENT];
+	int32_t startupMode = parameters_asUint32[uSTARTUP_MODE];
+	float maxCurrent = parameters_asFloat32[fMAX_CURRENT];
 
-	escId = (uint8_t) parameters_asUint32[ESC_ID];
+	escId = (uint8_t) parameters_asUint32[uESC_ID];
 
 	if (startupMode < 0 || startupMode >= NUM_RUN_MODES)
 		startupMode = 0;
@@ -816,20 +949,21 @@ void runCheckAndSetConstants(void)
 	else if (maxCurrent < RUN_MIN_MAX_CURRENT)
 		maxCurrent = RUN_MIN_MAX_CURRENT;
 
-	// TODO: runRPMFactor seems to be integer also - convert. 120/6 = 20
-	runRPMFactor = (1.0E6f * (float) TIMER_MULT * 120.0f) / ( parameters_asUint32[MOTOR_POLES] * 6.0f );
+	// TODO: try different RPM calc. scheme - derive from commutation cycle and MOTOR_POLES
+	runRPMFactor = (1.0E6f * (float) TIMER_MULT * 120.0f) / ( parameters_asUint32[uMOTOR_POLES] * 6.0f );
+	//i_runRPMFactor = runRPMFactor;
 	maxCurrentSQRT = sqrtf(maxCurrent);
 
 
-	parameters_asUint32[STARTUP_MODE] = startupMode;
-	parameters_asFloat32[MAX_CURRENT] = maxCurrent;
+	parameters_asUint32[uSTARTUP_MODE] = startupMode;
+	parameters_asFloat32[fMAX_CURRENT] = maxCurrent;
 
 
 	// Calculate MAX_THRUST from PWM_RPM_SCALE (which is MAX_RPM) and THRxTERMs
 	// Based on "thrust = rpm * a1 + rpm^2 * a2"
-	maxThrust = parameters_asUint32[PWM_RPM_SCALE] * parameters_asFloat32[THR1TERM]	+ parameters_asUint32[PWM_RPM_SCALE] * parameters_asUint32[PWM_RPM_SCALE] * parameters_asFloat32[THR2TERM];
+	maxThrust = parameters_asUint32[PWM_INTF_RPM_SCALE] * parameters_asFloat32[THR1TERM]	+ parameters_asUint32[PWM_INTF_RPM_SCALE] * parameters_asUint32[PWM_INTF_RPM_SCALE] * parameters_asFloat32[THR2TERM];
+	rpmPID_P_Coeff  = parameters_asUint32[uPTERM];
+	rpmPID_I_Coeff  = (parameters_asUint32[uITERM] * 1000) / RPM_PID_RUN_FREQ; // anything less than 2 will not work when RPM_PID_RUN_FREQ == 2000 Hz
 
-	rpmPTerm  = parameters_asFloat32[PTERM];
-	rpmITerm  = parameters_asFloat32[ITERM] * 1000.0f / RUN_FREQ;
-	runRpmLPF = parameters_asFloat32[RPM_MEAS_LP] * 1000.0f / RUN_FREQ; // RPM_MEAS_LP - default 0.5
+	runRpmLPF = parameters_asFloat32[fRPM_INTF_MEAS_LP] * 1000.0f / RPM_PID_RUN_FREQ; // RPM_MEAS_LP - default 0.5
 }

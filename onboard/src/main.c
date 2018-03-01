@@ -14,6 +14,8 @@
     along with AutoQuad ESC32.  If not, see <http://www.gnu.org/licenses/>.
 
     Copyright © 2011, 2012, 2013  Bill Nesbitt
+    
+    Modified 2016-2018 by A.Genchev
 */
 
 #include "main.h"
@@ -28,7 +30,7 @@
 #include "run.h"
 #include "cli.h"
 #include "binary.h"
-#ifdef ENABLE_ONEWIRE // define this in config.h
+#ifdef ENABLE_ONEWIRE // please, define which protocols are enabled in config.h
 #include "ow.h"
 #endif //ENABLE_ONEWIRE
 #include "can.h"
@@ -43,7 +45,7 @@ volatile uint8_t inputMode; // Run status, input mode (control mode serial port 
 int main(void)
 {
 	rccInit();   // Turn on some of the CPU clocks by default
-	NVIC_PriorityGroupConfig(NVIC_PriorityGroup_4); // 4 bits for preemp priority 0 bit for sub priority
+	NVIC_PriorityGroupConfig(NVIC_PriorityGroup_4); // 4 bits for preempt priority 0 bit for sub priority
 	//
 	GPIO_Init_PP_Output_Low(GPIO_STATUS_LED_PORT, GPIO_STATUS_LED_PIN); //statusLed = digitalInit(GPIO_STATUS_LED_PORT, GPIO_STATUS_LED_PIN);
 	GPIO_Init_PP_Output_Low(GPIO_ERROR_LED_PORT, GPIO_ERROR_LED_PIN); //errorLed = digitalInit(GPIO_ERROR_LED_PORT, GPIO_ERROR_LED_PIN);
@@ -89,14 +91,14 @@ int main(void)
 	{
 		uint32_t lastRunCount=0;
 		uint32_t thisCycles, lastCycles=0;
-		volatile uint32_t cycles;
+		uint32_t cycles; // was volatile
 		// Core Debug registers: see http://embeddedb.blogspot.bg/2013/10/how-to-count-cycles-on-arm-cortex-m.html
 		// if CPU has DWT  (Data Watchpoint and Trace) unit, you can use its register to count the number of cycles in which some code is executed
 		volatile uint32_t *DWT_CYCCNT = (uint32_t *) 0xE0001004; // the stm32 provides the DWT_CYCCNT register, which counts clock ticks. It is located at address 0xE0001004
 		volatile uint32_t *DWT_CONTROL = (uint32_t *) 0xE0001000;
 		volatile uint32_t *SCB_DEMCR = (uint32_t *) 0xE000EDFC;
 
-		*SCB_DEMCR = *SCB_DEMCR | 0x01000000;// enable the use of DWT
+		*SCB_DEMCR   = *SCB_DEMCR   | 0x01000000;// enable the use of DWT
 		*DWT_CONTROL = *DWT_CONTROL | 1;	 // enable the counter
 
 		minCycles = 0xffff; // 65535
@@ -104,22 +106,24 @@ int main(void)
 		{
 			idleCounter++;  // We calculate the CPU time left ?
 
-			if (runCount != lastRunCount && !(runCount % (RUN_FREQ / 1000)))
+			if (runCount != lastRunCount && !(runCount % (RPM_PID_RUN_FREQ / 1000))) // We limit execution rate to 1000 times per sec
 			{
 				if (commandMode == CLI_MODE)
 					cliCheck();        // check for cli command
 				else
 					binaryCheck();     // check for binary command
+				#ifdef ENABLE_CANBUS_PROTOCOL
+				canProcess(); // moved in the main thread from systick handler
+				#endif // ENABLE_CANBUS_PROTOCOL
 				lastRunCount = runCount;
 			}
 
 			thisCycles = *DWT_CYCCNT;
-			cycles = thisCycles - lastCycles;
+			cycles = thisCycles - lastCycles;	// cycles from previous read, e.t. current load
 			lastCycles = thisCycles;
 
-			// record shortest number of instructions for loop
 			totalCycles += cycles;
-			if (cycles < minCycles) minCycles = cycles;
+			if (cycles < minCycles) minCycles = cycles; // record shortest number of instructions for loop. e.t. fastest loop
 		}
 	}
 }

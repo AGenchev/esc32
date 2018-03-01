@@ -466,7 +466,7 @@ static int _io_dtofX(char * buf, double arg, unsigned char width, unsigned  char
     //
     // real implementation: if(arg<0){is_negative=1;arg=-arg;}else is_negative=0;
     // "failed" optimization w/o branches: is_negative= *pa16 >> 15; *pa16 &= (1U<<15);
-    if(*pa16 & 0x8000) { is_negative=1;*pa16 = *pa16 & 0x7FFF; } else is_negative=0; // smaller code
+    if(*pa16 & 0x8000) { is_negative=1;*pa16 = *pa16 & 0x7FFF; } else is_negative=0; // smaller code than above
     //
 	numstr = _io_cvt(arg, precision, &decpt, 0, cvtbuf, f_or_F);
 	// we should output right-aligned within "width" (if possible). We need total length

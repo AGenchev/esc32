@@ -162,23 +162,26 @@ void timerSetAlarm1(uint32_t ticks, timerCallback_ut *callback, uint32_t paramet
 }
 
 // fet.c uses it for the motorStartSeq and then for scheduling fetMissedCommutate() calls
-void timerSetAlarm2(uint32_t ticks, timerCallback_t *callback, int parameter) {
-    // do it now
-    if (ticks <= TIMER_MULT) {// less than 2 ticks. Call the callback function directly
-	// Disable the Interrupt
-	TIMER_TIM->DIER &= (uint16_t)~TIM_IT_CC2;
+void timerSetAlarm2(uint32_t ticks, timerCallback_t *callback, int parameter)
+{
+	// do it now
+	if (ticks <= TIMER_MULT)
+	{		// less than 2 ticks. Call the callback function directly
+		// Disable the Interrupt
+		TIMER_TIM->DIER &= (uint16_t) ~TIM_IT_CC2;
 
-	callback(parameter);
-    }
-    // otherwise, schedule it
-    else {
-	timerData.alarm2Callback = callback;
-	timerData.alarm2Parameter = parameter;
+		callback(parameter);
+	}
+	// otherwise, schedule it
+	else
+	{
+		timerData.alarm2Callback = callback;
+		timerData.alarm2Parameter = parameter;
 
-	TIMER_TIM->CCR2 = TIMER_TIM->CNT + ticks;
-	TIMER_TIM->SR = (uint16_t)~TIM_IT_CC2;
-	TIMER_TIM->DIER |= TIM_IT_CC2;
-    }
+		TIMER_TIM->CCR2 = TIMER_TIM->CNT + ticks;
+		TIMER_TIM->SR = (uint16_t) ~TIM_IT_CC2;
+		TIMER_TIM->DIER |= TIM_IT_CC2;
+	}
 }
 
 // used by ow.c. Mainly used for the 1wire protocol
@@ -204,29 +207,33 @@ void timerSetAlarm3(uint32_t ticks, timerCallback_t *callback, int parameter)
 	}
 }
 
-void TIMER_ISR(void) {
-    if (TIM_GetITStatus(TIMER_TIM, TIM_IT_CC1) != RESET) {
-	TIMER_TIM->SR = (uint16_t)~TIM_IT_CC1;
+void TIMER_ISR(void)
+{
+	if (TIM_GetITStatus(TIMER_TIM, TIM_IT_CC1) != RESET)
+	{
+		TIMER_TIM->SR = (uint16_t) ~TIM_IT_CC1;
 
-	// Disable the Interrupt
-	TIMER_TIM->DIER &= (uint16_t)~TIM_IT_CC1;
+		// Disable the Interrupt
+		TIMER_TIM->DIER &= (uint16_t) ~TIM_IT_CC1;
 
-	timerData.alarm1Callback(timerData.alarm1Parameter);
-    }
-    else if (TIM_GetITStatus(TIMER_TIM, TIM_IT_CC2) != RESET) {
-	TIMER_TIM->SR = (uint16_t)~TIM_IT_CC2;
+		timerData.alarm1Callback(timerData.alarm1Parameter);
+	}
+	else if (TIM_GetITStatus(TIMER_TIM, TIM_IT_CC2) != RESET)
+	{
+		TIMER_TIM->SR = (uint16_t) ~TIM_IT_CC2;
 
-	// Disable the Interrupt
-	TIMER_TIM->DIER &= (uint16_t)~TIM_IT_CC2;
+		// Disable the Interrupt
+		TIMER_TIM->DIER &= (uint16_t) ~TIM_IT_CC2;
 
-	timerData.alarm2Callback(timerData.alarm2Parameter);
-    }
-    else if (TIM_GetITStatus(TIMER_TIM, TIM_IT_CC3) != RESET) {
-	TIMER_TIM->SR = (uint16_t)~TIM_IT_CC3;
+		timerData.alarm2Callback(timerData.alarm2Parameter);
+	}
+	else if (TIM_GetITStatus(TIMER_TIM, TIM_IT_CC3) != RESET)
+	{
+		TIMER_TIM->SR = (uint16_t) ~TIM_IT_CC3;
 
-	// Disable the Interrupt
-	TIMER_TIM->DIER &= (uint16_t)~TIM_IT_CC3;
+		// Disable the Interrupt
+		TIMER_TIM->DIER &= (uint16_t) ~TIM_IT_CC3;
 
-	timerData.alarm3Callback(timerData.alarm3Parameter);
-    }
+		timerData.alarm3Callback(timerData.alarm3Parameter);
+	}
 }

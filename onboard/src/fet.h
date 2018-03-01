@@ -105,14 +105,14 @@
 
 #define FET_MIN_SWITCH_FREQ	4				    // KHz
 #define FET_MAX_SWITCH_FREQ	64				    // KHz
-#define FET_MIN_START_VOLTAGE	0.1				    // %
-#define FET_MAX_START_VOLTAGE	3.0				    // %
+#define FET_MIN_START_VOLTAGE	0.1f				    // %
+#define FET_MAX_START_VOLTAGE	3.0f				    // %
 #define FET_MIN_START_DETECTS	1
 #define FET_MAX_START_DETECTS	512
 #define FET_MIN_DISARM_DETECTS	1
 #define FET_MAX_DISARM_DETECTS	512
-#define FET_MIN_LIMIT_STEP	0.1				    // %
-#define FET_MAX_LIMIT_STEP	100.0				    // %
+#define FET_MIN_LIMIT_STEP	0.1f				    // %
+#define FET_MAX_LIMIT_STEP	100.0f				    // %
 
 #define FET_PANIC { \
     *AH_BITBAND = 0; \
@@ -134,7 +134,7 @@ typedef enum _fetSelfTestResults
     FET_TEST_C_HI_FAIL
 } fetSelfTestResults_t;
 
-extern uint32_t fetSwitchFreq;
+//extern uint32_t fetSwitchFreq;
 extern uint32_t fetStartDuty;
 extern uint16_t fetStartDetects;
 extern uint16_t fetDisarmDetects;
@@ -149,7 +149,7 @@ extern volatile uint32_t fetDutyCycle; // only >=0
 extern uint32_t fetPeriod;
 extern volatile uint32_t fetCommutationMicros;
 extern uint8_t fetBrakingEnabled;
-extern int8_t fetBraking;
+extern int8_t fetBrakingStatus;
 extern int8_t fetStepDir;
 extern float servoAngle;
 

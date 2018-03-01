@@ -225,19 +225,19 @@ void binaryCommandParse(void)
 	case BINARY_COMMAND_RPM:
 		if (parameters_asFloat32[FF1TERM] != 0.0f)
 		{
-			float rpm = commandBuf.params[0];
-
-			if (rpm < 100.0f)
-				rpm = 100.0f;
-			else if (rpm > 10000.0f)
-				rpm = 10000.0f;
+			float _rpm = commandBuf.params[0];
+			// clamp input value:
+			if (_rpm < 100.0f)
+				_rpm = 100.0f;
+			else if (_rpm > 10000.0f)
+				_rpm = 10000.0f;
 
 			if (runMode != CLOSED_LOOP_RPM)
 			{
 				runRpmPIDReset();
 				runMode = CLOSED_LOOP_RPM;
 			}
-			targetRpm = rpm;
+			targetRpm = _rpm;
 
 			binaryAck();
 		}
@@ -256,7 +256,7 @@ void binaryCommandParse(void)
 			if (freq > 1000)
 				freq = 1000;
 
-			binaryTelemRate = RUN_FREQ / freq;
+			binaryTelemRate = RPM_PID_RUN_FREQ / freq;
 			binaryTelemRows = (freq <= 100) ? 1 : (freq / 50);
 			binaryTelemetryStop = 0;
 
@@ -428,11 +428,12 @@ void binaryCheck(void)
 					break;
 
 				case BINARY_VALUE_VOLTS_BAT:
-					binarySendFloat(avg_BattmiliVolts / 1000.0); // was avgBattVolts
+					binarySendFloat(avg_BattmiliVolts / 1000.0f); // was avgBattVolts
 					break;
 
 				case BINARY_VALUE_VOLTS_MOTOR:
-					binarySendFloat( (float) fetActualDutyCycle / fetPeriod * avgBattVolts);
+					// binarySendFloat( (float) fetActualDutyCycle / fetPeriod * avgBattVolts);
+					binarySendFloat( (float) fetActualDutyCycle / fetPeriod * avg_BattmiliVolts/1000.0f);
 					break;
 
 				case BINARY_VALUE_RPM:

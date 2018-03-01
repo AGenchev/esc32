@@ -75,8 +75,8 @@
 #define ADC_SHUNT_GAINx10			621  // G=62.1; x10Value = 10*G = 10*(1+Rout/Rgnd), original value: 10*50.9f, current values: Rout=11 kΩ, Rgnd=180 Ω, G=62.1
 #define ADC_SHUNT_GAIN_X0x10		994  // 993.6 actually
 
-#define ADC_MIN_ADVANCE		0.1	    // in electrical degrees
-#define ADC_MAX_ADVANCE		30.0	// in electrical degrees
+#define ADC_MIN_ADVANCE		0.1f	    // in electrical degrees
+#define ADC_MAX_ADVANCE		30.0f	// in electrical degrees
 #define ADC_MIN_BLANKING_MICROS	0	    // hard limit define - in μS
 #define ADC_MAX_BLANKING_MICROS 100	    // hard limit define - in μS
 #define ADC_MIN_MIN_PERIOD	20	    // μS

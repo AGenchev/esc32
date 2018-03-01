@@ -127,20 +127,20 @@ void pwmInit(void)
 // #define - Defined as TIM1_CC_IRQHandler
 void PWM_IRQ_HANDLER(void)
 {
-	uint16_t pwmValue;
+	uint16_t _pwmValue;
 	uint16_t periodValue;
 	uint8_t edge;
 
 	edge = !(PWM_TIM->SR & TIM_IT_CC2);
 
 	periodValue = PWM_TIM->CCR1;
-	pwmValue = PWM_TIM->CCR2;
+	_pwmValue = PWM_TIM->CCR2;
 
 #ifdef ENABLE_ONEWIRE
 	// is this an OW reset pulse?
 	if (state == ESC_STATE_DISARMED && edge == 1
-			&& (periodValue - pwmValue) > OW_RESET_MIN
-			&& (periodValue - pwmValue) < OW_RESET_MAX)
+			&& (periodValue - _pwmValue) > OW_RESET_MIN
+			&& (periodValue - _pwmValue) < OW_RESET_MAX)
 	{
 		owReset();
 	}
@@ -148,13 +148,13 @@ void PWM_IRQ_HANDLER(void)
 	else
 #endif
 	if (inputMode == ESC_INPUT_PWM && periodValue >= pwmMinPeriod
-			&& periodValue <= pwmMaxPeriod && pwmValue >= pwmMinValue
-			&& pwmValue <= pwmMaxValue)
+			&& periodValue <= pwmMaxPeriod && _pwmValue >= pwmMinValue
+			&& _pwmValue <= pwmMaxValue)
 	{
 		if (edge == 0)
 		{
 			pwmValidMicros = timerMicros;
-			runNewInput(pwmValue);
+			runNewInput(_pwmValue);
 		}
 	}
 #ifdef ENABLE_ONEWIRE
@@ -169,21 +169,21 @@ void PWM_IRQ_HANDLER(void)
 
 void pwmSetConstants(void)
 {
-	uint32_t rpmScale = parameters_asUint32[PWM_RPM_SCALE];
+	uint32_t rpmScale = parameters_asUint32[PWM_INTF_RPM_SCALE];
 
-	pwmMinPeriod = parameters_asUint32[PWM_MIN_PERIOD];  // PWM minimum cycle timer1 ch1
-	pwmMaxPeriod = parameters_asUint32[PWM_MAX_PERIOD];
-	pwmMinValue  = parameters_asUint32[PWM_MIN_VALUE];
-	pwmLoValue   = parameters_asUint32[PWM_LO_VALUE];
-	pwmHiValue   = parameters_asUint32[PWM_HI_VALUE];
-	pwmMaxValue  = parameters_asUint32[PWM_MAX_VALUE];
-	pwmMinStart  = parameters_asUint32[PWM_MIN_START];
+	pwmMinPeriod = parameters_asUint32[PWM_INTF_MIN_PERIOD];  // PWM minimum cycle timer1 ch1
+	pwmMaxPeriod = parameters_asUint32[PWM_INTF_MAX_PERIOD];
+	pwmMinValue  = parameters_asUint32[PWM_INTF_MIN_VALUE];
+	pwmLoValue   = parameters_asUint32[PWM_INTF_LO_VALUE];
+	pwmHiValue   = parameters_asUint32[PWM_INTF_HI_VALUE];
+	pwmMaxValue  = parameters_asUint32[PWM_INTF_MAX_VALUE];
+	pwmMinStart  = parameters_asUint32[PWM_INTF_MIN_START];
 
 	if (rpmScale < PWM_RPM_SCALE_MIN)	rpmScale = PWM_RPM_SCALE_MIN;
 	else if (rpmScale > PWM_RPM_SCALE_MAX)
 		rpmScale = PWM_RPM_SCALE_MAX;
 
-	parameters_asUint32[PWM_RPM_SCALE] = rpmScale;
+	parameters_asUint32[PWM_INTF_RPM_SCALE] = rpmScale;
 }
 
 #endif //ENABLE_PWM_PROTOCOL

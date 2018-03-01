@@ -315,7 +315,7 @@ static inline void canProcessGet(canPacket_t *pkt)
 		break;
 
 	case CAN_DATA_STATE:
-		((uint8_t *) pkt->data)[0] = state;
+		((uint8_t *) pkt->data)[0] = ESC_state;
 		canReply(pkt, 1);
 		break;
 
@@ -540,7 +540,7 @@ void canSendStatus(void)
 {
 	esc32CanStatus_t stat;
 
-	stat.state = state;
+	stat.state = ESC_state;
 	stat.vin = avg_BattmiliVolts / 10; // avgBattVolts * 100;
 	stat.amps = avgAmps * 100;
 	stat.rpm = rpm;
@@ -580,7 +580,7 @@ static inline void canProcessCmd(canPacket_t *pkt)
 	switch (pkt->doc)
 	{
 	case CAN_CMD_ARM:
-		if (state == ESC_STATE_DISARMED)
+		if (ESC_state == ESC_STATE_DISARMED)
 			runArm();
 		canAck(pkt);
 		break;
@@ -621,7 +621,7 @@ static inline void canProcessCmd(canPacket_t *pkt)
 		break;
 
 	case CAN_CMD_CFG_READ:
-		if (state <= ESC_STATE_STOPPED)
+		if (ESC_state <= ESC_STATE_STOPPED)
 		{
 			configReadFlash();
 			canAck(pkt);
@@ -633,14 +633,14 @@ static inline void canProcessCmd(canPacket_t *pkt)
 		break;
 
 	case CAN_CMD_CFG_WRITE:
-		if (state <= ESC_STATE_STOPPED && configWriteFlash())
+		if (ESC_state <= ESC_STATE_STOPPED && configWriteFlash())
 			canAck(pkt);
 		else
 			canNack(pkt);
 		break;
 
 	case CAN_CMD_CFG_DEFAULT:
-		if (state <= ESC_STATE_STOPPED)
+		if (ESC_state <= ESC_STATE_STOPPED)
 		{
 			configLoadDefault();
 			canAck(pkt);
@@ -653,8 +653,8 @@ static inline void canProcessCmd(canPacket_t *pkt)
 
 	case CAN_CMD_TELEM_RATE:
 		canData.telemRate = *(uint16_t *) pkt->data;
-		if (canData.telemRate > RUN_FREQ)
-			canData.telemRate = RUN_FREQ;
+		if (canData.telemRate > RPM_PID_RUN_FREQ)
+			canData.telemRate = RPM_PID_RUN_FREQ;
 		canAck(pkt);
 		break;
 
@@ -668,7 +668,7 @@ static inline void canProcessCmd(canPacket_t *pkt)
 		break;
 
 	case CAN_CMD_BEEP:
-		if (state <= ESC_STATE_STOPPED)
+		if (ESC_state <= ESC_STATE_STOPPED)
 		{
 			canProcessBeep(pkt);
 			canAck(pkt);
@@ -680,7 +680,7 @@ static inline void canProcessCmd(canPacket_t *pkt)
 		break;
 
 	case CAN_CMD_POS:
-		if (runMode == SERVO_MODE || state == ESC_STATE_RUNNING)
+		if (runMode == SERVO_MODE || ESC_state == ESC_STATE_RUNNING)
 		{
 			canProcessPos(pkt);
 		}
@@ -705,13 +705,13 @@ void canProcess(void)
 	loops++;
 
 	// telemetry
-	if (canData.telemRate && !(loops % (RUN_FREQ / canData.telemRate)))
+	if (canData.telemRate && !(loops % (RPM_PID_RUN_FREQ / canData.telemRate)))
 		canTelemDo();
 
 	if (CAN_MessagePending(CAN_CAN, CAN_FIFO0) == 0)
 	{
 		// keep trying to get an address
-		if (canData.networkId == 0 && !(loops % (100 * 1000 / RUN_FREQ)))
+		if (canData.networkId == 0 && !(loops % (100 * 1000 / RPM_PID_RUN_FREQ)))
 			canSendGetAddr();
 
 		return;

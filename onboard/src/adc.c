@@ -46,7 +46,7 @@ uint32_t adcMinPeriod; // ADC minimum commutation time in ... units
 
 
 static uint16_t histIndex;  // the index value of the hist array
-uint16_t histSize;          // size of the array
+uint16_t histSize;          // size of the array (ADC window?)
 static uint16_t histA[ADC_HIST_SIZE]; // Adc converted values
 static uint16_t histB[ADC_HIST_SIZE];
 static uint16_t histC[ADC_HIST_SIZE];
@@ -60,8 +60,8 @@ volatile int32_t adcAvgVolts_x0x65536;
 uint8_t adcStateA, adcStateB, adcStateC;  //
 
 volatile uint32_t detectedCrossing;
-volatile uint32_t crossingPeriod; //
-volatile int32_t adcCrossingPeriod;
+volatile uint32_t crossingPeriod;  //
+volatile int32_t adcCrossingPeriod;// calculated from sampled data
 uint32_t nextCrossingDetect;
 uint32_t numLoops;
 
@@ -266,6 +266,7 @@ static inline void adcEvaluateHistSize(void)
 
 //#pragma GCC optimize ("-O1")
 #pragma GCC optimize ("-O3")
+// we have transfer finished or half-finished
 void DMA1_Channel1_IRQHandler(void)
 {
 	register uint16_t *raw = (uint16_t *) adcRawData;
@@ -273,15 +274,15 @@ void DMA1_Channel1_IRQHandler(void)
 	//int ampsFlag = 0;
 	uint32_t currentMicros;
 
-	__disable_irq();// __asm volatile ("cpsid i"); same code with global GCC -O2, but much readable
+	__disable_irq();// __asm volatile ("cpsid i"); same code with global GCC -O2, but much more readable
 	currentMicros = timerGetMicros();
 	__enable_irq();//__asm volatile ("cpsie i");
 
 #ifdef ADC_FAST_SAMPLE
 // DMA channels can generate three interrupts: transfer finished, half-finished and transfer error.
 	if ((DMA1->ISR & DMA1_FLAG_TC1) != RESET)
-	{
-		raw += (ADC_CHANNELS * 4);         // "4 16bit words" inside of 4 32-bit DWords
+	{// transfer complete:
+		raw += (ADC_CHANNELS * 4);         // "4 16bit words" inside of 4 32-bit DWords. raw is 16-bit pointer
 		// The pointer above is typed, so it's incremented by 16 bytes e.t. by 4 "DWords"
 		// since Dwords are  used, raw[0] contains first sample of SENSE_VIN, raw[1] contains 0, raw[2] contains second sample of SENSE_VIN
 		adcAvgVolts_x0x65536 -= (adcAvgVolts_x0x65536	- (int32_t) ((raw[0] + raw[2]) << (ADC_VOLTS_PRECISION - 1))) >> 6;
@@ -290,7 +291,7 @@ void DMA1_Channel1_IRQHandler(void)
 		// we shift by 16-1 = 15 bits, because we sum 2 values and *divide* the result by 2
 		// if adcAvgVolts is also 6553600, we get 0, so adcAvgVolts stays the same.
 		// if adcAvgVolts is 5000000, we get 5000000 - (5000000 - 6553600) >> 6 == 5000000 - -24275 = 5000000 + 24275
-		// = 5024275, e.t. the average slowly will converge to the new value with K=1/64. Lowpass filtering.
+		// = 5024275, e.t. the average slowly will converge to the new value with K=1/64. E.t Lowpass filtering.
 		// e.t. adcAvgVolts_x0x10000 = adcAvgVolts_x0x10000 - (adcAvgVolts_x0x10000 - newAVG*x0x10000)/64, e.t. adcAvgVolts + Difference/64
 		// this is equal to  adcAvgVolts_x0x10000 = adcAvgVolts_x0x10000 + (newAVG*65536 - adcAvgVolts_x0x10000 )/64
 
@@ -321,10 +322,9 @@ void DMA1_Channel1_IRQHandler(void)
 	// blanking time after commutation
 	if (!fetCommutationMicros	|| ((currentMicros >= fetCommutationMicros) ?
 					(currentMicros - fetCommutationMicros) : (TIMER_MASK - fetCommutationMicros + currentMicros)) > adcblankingMicros)
-
 	{
 #ifdef ADC_FAST_SAMPLE
-		histA[histIndex] = valA = (raw[1] + raw[3]); // sum of Value[t-1] + Value [t]
+		histA[histIndex] = valA = (raw[1] + raw[3]); // A-sum of Value[t-1] + Value [t]
 		histB[histIndex] = valB = (raw[4] + raw[6]);
 		histC[histIndex] = valC = (raw[5] + raw[7]);
 #else
@@ -340,14 +340,14 @@ void DMA1_Channel1_IRQHandler(void)
 		if ((avgA + avgB + avgC) / histSize > (ADC_MIN_COMP * 3) && ESC_state != ESC_STATE_DISARMED)
 		{ // Zero crossing:
 			register int32_t periodMicros;
-			// current time - last commutation time = two time intervals
+			// current time - last commutation time = interval
 			periodMicros = (currentMicros >= detectedCrossing) ?
 							// current time - the time of the last commutation
 							(currentMicros - detectedCrossing) : (TIMER_MASK - detectedCrossing + currentMicros);// get the adc interval twice
 
 			if (periodMicros > nextCrossingDetect)
 			{ //
-				register int8_t nextStep = 0;
+				register uint_fast8_t nextStep = 0; // 0 - used as flag
 
 				if (!adcStateA && avgA >= (avgB + avgC) >> 1)
 				{
@@ -399,13 +399,13 @@ void DMA1_Channel1_IRQHandler(void)
 				}
 
 				if (nextStep && periodMicros > adcMinPeriod)
-				{
+				{ // have zc detection:
 					if (periodMicros > adcMaxPeriod)
 						periodMicros = adcMaxPeriod;
 
 //		    crossingPeriod = (crossingPeriod*3 + periodMicros)/4;
 //		    crossingPeriod = (crossingPeriod*5 + periodMicros)/6;
-					adcCrossingPeriod += ((periodMicros << 15) - adcCrossingPeriod) >> 3;
+					adcCrossingPeriod += ((periodMicros << 15) - adcCrossingPeriod) >> 3; // adcCrossingPeriod + (periodMicros*32768 - adcCrossingPeriod) / 8
 					crossingPeriod = adcCrossingPeriod >> 15;
 //		    adcCrossingPeriod += ((periodMicros<<15) - adcCrossingPeriod)>>4;
 //		    crossingPeriod = adcCrossingPeriod>>15;
@@ -414,7 +414,7 @@ void DMA1_Channel1_IRQHandler(void)
 
 					// schedule next commutation
 					fetStep = nextStep;
-					fetCommutationMicros = 0;
+					fetCommutationMicros = 0; // reset
 					timerSetAlarm1(	crossingPeriod	/ 2- (ADC_DETECTION_TIME*(histSize+2))/2 - ADC_COMMUTATION_ADVANCE,	fetCommutate, crossingPeriod);
 
 					// record crossing time
@@ -425,14 +425,14 @@ void DMA1_Channel1_IRQHandler(void)
 
 					// calculate next crossing detection time
 					//		nextCrossingDetect = crossingPeriod*2/3;
-					nextCrossingDetect = crossingPeriod * 3 / 4;
+					nextCrossingDetect = (crossingPeriod * 3) / 4;
 					//		nextCrossingDetect = crossingPeriod*6/8;
 
 					// record highest current draw for this run
 					if (adcAvgAmps_ShuntVoltage > adcMaxAmps)
 						adcMaxAmps = adcAvgAmps_ShuntVoltage;
 				}
-			}
+			} // ~~ periodMicros > nextCrossingDetect ^^^^^
 		}
 	}
 }
@@ -451,9 +451,9 @@ void adcSetConstants(void)
 {
 	uint32_t shuntResistance_miliOhm = parameters_asUint32[SHUNT_RESISTANCE_MILIOHM];
 	float advance = parameters_asFloat32[ADVANCE];
-	float blankingMicros = parameters_asFloat32[BLANKING_MICROS];
-	float minPeriod = parameters_asFloat32[MIN_PERIOD];
-	float maxPeriod = parameters_asFloat32[MAX_PERIOD];
+	float blankingMicros = parameters_asFloat32[fBLANKING_MICROS];
+	float minPeriod = parameters_asFloat32[fMIN_PERIOD];
+	float maxPeriod = parameters_asFloat32[fMAX_PERIOD];
 
 	// bounds checking
 	if (shuntResistance_miliOhm > ADC_MAX_SHUNT_MILI_OHMS)		shuntResistance_miliOhm = ADC_MAX_SHUNT_MILI_OHMS;
@@ -479,9 +479,9 @@ void adcSetConstants(void)
 
 	parameters_asUint32[SHUNT_RESISTANCE_MILIOHM] = shuntResistance_miliOhm;
 	parameters_asFloat32[ADVANCE] = advance;
-	parameters_asFloat32[BLANKING_MICROS] = blankingMicros;
-	parameters_asFloat32[MIN_PERIOD] = minPeriod;
-	parameters_asFloat32[MAX_PERIOD] = maxPeriod;
+	parameters_asFloat32[fBLANKING_MICROS] = blankingMicros;
+	parameters_asFloat32[fMIN_PERIOD] = minPeriod;
+	parameters_asFloat32[fMAX_PERIOD] = maxPeriod;
 }
 
 // We've got a fixed point converter w/o division (compiles to smull,umull and bitshifting):

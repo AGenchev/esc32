@@ -79,7 +79,7 @@ volatile uint32_t fetBadDetects;  // Total number of errors detected
 volatile uint32_t fetTotalBadDetects;  // Total number of errors detected
 volatile uint32_t fetCommutationMicros; // the time of the motor commutation (acquired in the commutation))
 uint8_t fetBrakingEnabled;        // = 1 to turn on the brake mode, allows the brake to be set in the parameter table
-int8_t fetBraking;
+int8_t fetBrakingStatus;
 int16_t startSeqCnt;
 int8_t fetStepDir;
 float fetServoAngle;            // The target value of the motor to be operated (valid only in servo mode) PID
@@ -96,11 +96,10 @@ void fetCreateSine(void)
 
 	for (i = 0; i < FET_SERVO_RESOLUTION; i++) // 0..1023
 	{
-		a = M_PI * 2.0f * i / FET_SERVO_RESOLUTION; // multiplied by 2 to expand 2 times and ...
+		a = (float)M_PI * 2.0f * i / FET_SERVO_RESOLUTION; // multiplied by 2 to expand 2 times and ...
 
 		// third order harmonic injection. Fill Sine LUT:
-		fetSineLUT[i] = (sinf(a) + sinf(a * 3.0f) / 6.0f) * (2.0f / sqrtf(3.0f))
-				* (float) fetPeriod / 2.0f;
+		fetSineLUT[i] = (sinf(a) + sinf(a * 3.0f) / 6.0f) * (2.0f / sqrtf(3.0f)) * (float) fetPeriod / 2.0f;
 	}
 }
 
@@ -137,7 +136,7 @@ void fetUpdateServo(void)
 		*CH_BITBAND = 1;
 
 		e = (fetServoAngle - myAngle);
-		a = e * parameters_asFloat32[SERVO_P]; // Servo mode PID calculation - Proportional component application
+		a = e * parameters_asFloat32[fSERVO_P]; // Servo mode PID calculation - Proportional component application
 		if (a > fetServoMaxRate)
 			a = fetServoMaxRate;
 		else if (a < -fetServoMaxRate)
@@ -145,7 +144,7 @@ void fetUpdateServo(void)
 
 		myAngle += a;
 
-	myAngle += (a - servoDState) * parameters_asFloat32[SERVO_D];  // differential component application
+	myAngle += (a - servoDState) * parameters_asFloat32[fSERVO_D];  // differential component application
 	servoDState = a;
 
 	index = ((float)FET_SERVO_RESOLUTION * myAngle / 360.0f); // Find the index number @ the fetSine array
@@ -153,13 +152,13 @@ void fetUpdateServo(void)
 	    index += FET_SERVO_RESOLUTION;
 	index = index % FET_SERVO_RESOLUTION;
   // Calculate the 3 outputs duty cycles
-	pwm[0] = fetPeriod/2 + fetSineLUT[index] * parameters_asFloat32[SERVO_DUTY] / 100;
+	pwm[0] = fetPeriod/2 + fetSineLUT[index] * parameters_asFloat32[fSERVO_DUTY] / 100;
 
 	index = ((index + FET_SERVO_RESOLUTION / 3) % FET_SERVO_RESOLUTION);
-	pwm[1] = fetPeriod/2 + fetSineLUT[index] * parameters_asFloat32[SERVO_DUTY] / 100;
+	pwm[1] = fetPeriod/2 + fetSineLUT[index] * parameters_asFloat32[fSERVO_DUTY] / 100;
 
 	index = ((index + FET_SERVO_RESOLUTION / 3) % FET_SERVO_RESOLUTION);
-	pwm[2] = fetPeriod/2 + fetSineLUT[index] * parameters_asFloat32[SERVO_DUTY] / 100;
+	pwm[2] = fetPeriod/2 + fetSineLUT[index] * parameters_asFloat32[fSERVO_DUTY] / 100;
 
 	fetApplyServoDuty(pwm); // send calculated PWM values to the HW registers
     }
@@ -178,13 +177,13 @@ void fetUpdateServo(void)
 // the angle at which the motor is to be run, from the acquired PWM value setting (used only in servo mode))
 void fetSetAngleFromPwm(int32_t pwm)
 {
-	fetServoAngle = pwm * parameters_asFloat32[SERVO_SCALE] * parameters_asUint32[MOTOR_POLES] * 0.5f / fetPeriod;
+	fetServoAngle = pwm * parameters_asFloat32[fSERVO_SCALE] * parameters_asUint32[uMOTOR_POLES] * 0.5f / fetPeriod;
 }
 
 // In the cli.c file, the function cliFuncPos call, (only in servo mode), sets the motor to run to given angle
 void fetSetAngle(float angle)
 {
-	fetServoAngle = angle * parameters_asUint32[MOTOR_POLES] * 0.5f;
+	fetServoAngle = angle * parameters_asUint32[uMOTOR_POLES] * 0.5f;
 }
 
 
@@ -361,7 +360,7 @@ void fetBeep(uint16_t freq, uint16_t duration) {
     runIWDGInit(prevReloadVal);
 }
 // value: = 1 Sets the braking mode
-void fetSetBraking(int8_t value)
+void  fetSetBraking(int8_t value)
 {
 	if (value)
 	{
@@ -373,7 +372,7 @@ void fetSetBraking(int8_t value)
 		*AL_BITBAND = 1;
 		*BL_BITBAND = 1;
 		*CL_BITBAND = 1;
-		fetBraking = 1;
+		fetBrakingStatus = 1;
 	}
 	else
 	{
@@ -381,12 +380,12 @@ void fetSetBraking(int8_t value)
 		*AL_BITBAND = 0;
 		*BL_BITBAND = 0;
 		*CL_BITBAND = 0;
-		fetBraking = 0;
+		fetBrakingStatus = 0;
 	}
 }
 
 // Set the duty cycle to the CPU HW registers
-void fetApplyDutyCycle(uint32_t dutyCycle)
+void inline fetApplyDutyCycle(uint32_t dutyCycle)
 {
 	register uint32_t tmp; // >=0
 
@@ -415,18 +414,17 @@ void fetApplyDutyCycle(uint32_t dutyCycle)
 
 
 // Set fet duty cycle variable with bound checking 
-void fetSetDutyCycle(uint32_t requestedDutyCycle)
+void inline fetSetDutyCycle(uint32_t requestedDutyCycle)
 {
 	if (requestedDutyCycle > fetPeriod)
 		requestedDutyCycle = fetPeriod;
 	// else if (requestedDutyCycle > 0xFFFF) requestedDutyCycle = 0;
-
 	fetDutyCycle = requestedDutyCycle;
 }
 
 static inline uint8_t fetGetNextStep(uint8_t step)
 {
-	uint8_t nextStep;
+	uint_least8_t nextStep;
 
 	nextStep = step + fetStepDir;
 	if (nextStep > 6)
@@ -455,8 +453,8 @@ void fetSetStep(unsigned int n)
 	*BH_BITBAND = BH[n];
 	*CH_BITBAND = CH[n];
 
-	if (fetBrakingEnabled)
-		fetSetBraking(fetBraking);
+	if (fetBrakingEnabled) // feature enabled in config
+		fetSetBraking(fetBrakingStatus); // Apply according actual status variable.
 
 	// set low side   - L side in GPIO mode - set high or low levels:
 	FET_A_L_PORT->BSRR = AL[n]; //GPIOA_7
@@ -689,7 +687,7 @@ void fetStartCommutation(uint8_t startStep)
 {
 	fetSetBraking(0);
 	// fetStartDuty = parameters_asFloat32[START_VOLTAGE] / avgBattVolts * fetPeriod; // start cycle = start voltage / battery voltage (12V) * PWM pulse period
-	fetStartDuty = 1000 * parameters_asFloat32[START_VOLTAGE] / avg_BattmiliVolts * fetPeriod;
+	fetStartDuty = 1000 * parameters_asFloat32[fSTART_VOLTAGE] / avg_BattmiliVolts * fetPeriod;
 	adcSetCrossingPeriod(adcMaxPeriod / 2);
 	detectedCrossing = timerMicros;
 	fetDutyCycle = fetStartDuty;
@@ -700,7 +698,7 @@ void fetStartCommutation(uint8_t startStep)
 	fetTotalBadDetects = 0;
 	fetNextStep = startStep;
 
-	// start
+	// start. fetMissedCommutate will switch to next step state
 	timerSetAlarm2(0, fetMissedCommutate, crossingPeriod);
 }
 
@@ -710,38 +708,40 @@ void motorStartSeq(int period)
 	int nextPeriod;
 
 	// Static field to align rotor. Without commutation.
-	if (startSeqCnt < parameters_asUint32[START_ALIGN_TIME])
+	if (startSeqCnt < parameters_asUint32[uSTART_ALIGN_TIME])
 	{
 		// PWM ramp up   -   the duty cycle slowly increases
-		fetStartDuty = parameters_asFloat32[START_ALIGN_VOLTAGE]	* ((float) startSeqCnt / parameters_asUint32[START_ALIGN_TIME])	/ avgBattVolts * fetPeriod;
+		// fetStartDuty = parameters_asFloat32[START_ALIGN_VOLTAGE]	* ((float) startSeqCnt / parameters_asUint32[START_ALIGN_TIME])	/ avgBattVolts * fetPeriod;
+		fetStartDuty = parameters_asFloat32[START_ALIGN_VOLTAGE]	* (1000 * (float) startSeqCnt / parameters_asUint32[uSTART_ALIGN_TIME])	/ avg_BattmiliVolts * fetPeriod;
 		fetDutyCycle = fetStartDuty;
 		fetApplyDutyCycle(fetDutyCycle);
 
 		// Prepare next function call
-		period = 1000 * TIMER_MULT; // 1 ms
+		period = 1000 * TIMER_MULT; // 1000 uS = 1 ms
 		nextPeriod = 1000 * TIMER_MULT;
 		timerSetAlarm2(period, motorStartSeq, nextPeriod);
 	}
 	// Rotating field with optional acceleration but without commutation.
-	else if (startSeqCnt < (parameters_asUint32[START_ALIGN_TIME] + parameters_asUint32[START_STEPS_NUM]))
+	else if (startSeqCnt < (parameters_asUint32[uSTART_ALIGN_TIME] + parameters_asUint32[uSTART_STEPS_NUM]))
 	{
 		// One time if entering "Rotating field"
-		if (startSeqCnt == parameters_asUint32[START_ALIGN_TIME])
+		if (startSeqCnt == parameters_asUint32[uSTART_ALIGN_TIME])
 		{
-			period = parameters_asFloat32[MAX_PERIOD] * TIMER_MULT;
+			period = parameters_asFloat32[fMAX_PERIOD] * TIMER_MULT;
 			detectedCrossing = timerMicros;
 		}
 
 		fetSetStep(fetNextStep);  // next step [1..6]
 
 		// Set PWM
-		fetStartDuty = parameters_asFloat32[START_VOLTAGE] / avgBattVolts * fetPeriod;
+		//fetStartDuty = parameters_asFloat32[START_VOLTAGE] / avgBattVolts * fetPeriod;
+		fetStartDuty = (1000*parameters_asFloat32[fSTART_VOLTAGE]) / avg_BattmiliVolts * fetPeriod;
 		fetDutyCycle = fetStartDuty;
 		fetApplyDutyCycle(fetDutyCycle);
 
 		// Prepare next function call
-		nextPeriod = period - (parameters_asUint32[START_STEPS_ACCEL] * TIMER_MULT);
-		if (nextPeriod < (parameters_asUint32[START_STEPS_PERIOD] * TIMER_MULT) )
+		nextPeriod = period - (parameters_asUint32[uSTART_STEPS_ACCEL] * TIMER_MULT);
+		if (nextPeriod < (parameters_asUint32[uSTART_STEPS_PERIOD] * TIMER_MULT) )
 			nextPeriod = crossingPeriod;
 
 		timerSetAlarm2(period, motorStartSeq, nextPeriod);
@@ -749,7 +749,7 @@ void motorStartSeq(int period)
 	else
 	{
 		// let motor run
-		if (parameters_asUint32[START_STEPS_NUM])
+		if (parameters_asUint32[uSTART_STEPS_NUM])
 		{
 			adcMaxAmps = 0;
 			fetGoodDetects = 0;
@@ -827,12 +827,12 @@ void fetTest(void)
 
 void fetSetConstants(void)
 {
-	float switchFreq = parameters_asFloat32[SWITCH_FREQ]; // PWM freq default 20Khz
-	float startVoltage = parameters_asFloat32[START_VOLTAGE];
-	float startDetects = parameters_asFloat32[GOOD_DETECTS_START];
-	float disarmDetects = parameters_asFloat32[BAD_DETECTS_DISARM];
-	uint32_t fetBraking = parameters_asUint32[FET_BRAKING];
-	float servoMaxRate = parameters_asFloat32[SERVO_MAX_RATE];
+	uint32_t switchFreq = parameters_asUint32[uSWITCH_FREQ]; // PWM freq default 20Khz
+	float startVoltage = parameters_asFloat32[fSTART_VOLTAGE];
+	uint32_t startDetects = parameters_asUint32[uGOOD_DETECTS_START];
+	uint32_t disarmDetects = parameters_asUint32[uBAD_DETECTS_DISARM];
+	uint32_t cfg_fetBraking = parameters_asUint32[uFET_BRAKING];
+	float servoMaxRate = parameters_asFloat32[fSERVO_MAX_RATE];
 
 	// bounds checking
 	if (switchFreq > FET_MAX_SWITCH_FREQ)
@@ -855,36 +855,36 @@ void fetSetConstants(void)
 	else if (disarmDetects < FET_MIN_DISARM_DETECTS)
 		disarmDetects = FET_MIN_DISARM_DETECTS;
 
-	if (fetBraking > 0)
-		fetBraking = 1;
+	if (cfg_fetBraking > 0)
+		cfg_fetBraking = 1;
 	else
-		fetBraking = 0;
+		cfg_fetBraking = 0;
 
 	if (servoMaxRate <= 0.0f)
 		servoMaxRate = 360.0f;
 	// Calculate CPU timer frequency division register:
 	uint32_t fetSwitchFreq;
 	fetSwitchFreq = switchFreq * 1000 * 2; // Calculate the frequency from KHz setting
-	fetPeriod = FET_AHB_FREQ / fetSwitchFreq; // bus speed / switching frequency - depends on fetSwitchFreq
+	fetPeriod = FET_AHB_FREQ / fetSwitchFreq; // bus speed / switching frequency - depends on fetSwitchFreq. Default: 36MHz/20kHz = 36000/20 = 3600/2 = 1800
 	fetSetBaseTime(fetPeriod);
 
 	fetStartDetects = startDetects;
 	fetDisarmDetects = disarmDetects;
-	fetBrakingEnabled = (uint8_t) fetBraking;
-	fetServoMaxRate = servoMaxRate / RUN_FREQ * parameters_asUint32[MOTOR_POLES] * 0.5f;
+	fetBrakingEnabled = (uint8_t) cfg_fetBraking;
+	fetServoMaxRate = servoMaxRate / RPM_PID_RUN_FREQ * parameters_asUint32[uMOTOR_POLES] * 0.5f;
 
-	if (parameters_asSint32[DIRECTION] >= 0 )
+	if (parameters_asSint32[iDIRECTION] >= 0 )
 		fetStepDir = 1;
 	else
 		fetStepDir = -1;
 
-	parameters_asFloat32[SWITCH_FREQ] = switchFreq;
-	parameters_asFloat32[START_VOLTAGE] = startVoltage;
-	parameters_asFloat32[GOOD_DETECTS_START] = startDetects;
-	parameters_asFloat32[BAD_DETECTS_DISARM] = disarmDetects;
-	parameters_asUint32[FET_BRAKING] = fetBraking;
-	parameters_asFloat32[SERVO_MAX_RATE] = servoMaxRate;
-	parameters_asSint32[DIRECTION] = fetStepDir;
+	parameters_asUint32[uSWITCH_FREQ] = switchFreq;
+	parameters_asFloat32[fSTART_VOLTAGE] = startVoltage;
+	parameters_asUint32[uGOOD_DETECTS_START] = startDetects;
+	parameters_asUint32[uBAD_DETECTS_DISARM] = disarmDetects;
+	parameters_asUint32[uFET_BRAKING] = cfg_fetBraking;
+	parameters_asFloat32[fSERVO_MAX_RATE] = servoMaxRate;
+	parameters_asSint32[iDIRECTION] = fetStepDir;
 
 	fetCreateSine();
 }

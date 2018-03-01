@@ -4,6 +4,7 @@
  * \details STM32 (STM32F101 - STM32F103) vector table and startupcode
  * \author Marten Petschke
  * \date 21.Aug.2012
+ * \Modifications, comments - A.Genchev, date 17.May.2015 
  */
 
 
@@ -319,7 +320,8 @@ void DMA2_Channel4_5_IRQHandler(void) __attribute__ ((interrupt, weak, alias("__
 | This table covers the very first 8 bytes in the Flash. They contain a
 | stack address and a jump address to the first code - Reset_handler()
 +=============================================================================+
-Note: there are some extra handlers at the end not for STM32F103C8
+Note: there are some extra handlers at the end, not for STM32F103C8
+Note: the table name below(g_ISR_Vectors) must be the same as in the linker script used !!!
 */
 
 void (* const g_ISR_Vectors[])(void) __attribute__ ((section(".g_ISR_Vectors"))) =
@@ -421,11 +423,11 @@ void __attribute__((noreturn)) Reset_Handler(void)
 	// SCB->VTOR = (unsigned int) & g_ISR_Vectors;
 	//asm(" bkpt ");
 	// http://embdev.net/topic/185672:
-	// Re-set stack pointer: basically this is *NOT* necessary, because we loose only 4 bytes stack memory - despite "noreturn" flag,
+	// A.Genchev: We reset stack pointer: basically this is *NOT* necessary, because we loose only 4 bytes stack memory - despite "noreturn" flag,
 	// GCC has pushed one register (r7) into the stack.
-	// But I like to show how it's done - to restore the lost 32 bits, we put in more bits in code:
-	//asm(" LDR r0, =__stack_start"); // Load stack start address into r0
-	//asm(" MSR msp, r0"); // r0 -> r13
+	// To restore the lost 32 bits, we put in more bits in code. Also this code helps me when I debug from RAM.
+	asm(" LDR r0, =__stack_start"); // Load stack start address into r0
+	asm(" MSR msp, r0"); // r0 -> r13
 
 	/* SCB's VTOR register to the correct interrupt-vector-table address in ram
 	 * Vector_Table_Base is defined in misc.h as follows:
@@ -439,7 +441,7 @@ void __attribute__((noreturn)) Reset_Handler(void)
 	__Init_Data();
 	SystemInit(); // // Setup STM32 system (clock, PLL and Flash configuration)
 	//init_UART1(); // printf support
-	//_start(); // c library start. absent if -nostdlib switch used on linker
+	//_start(); // c library start. absent/not linked in if "-nostdlib" switch used on linker
 	main(); // starting main program
 
 	while(1){} // no-return

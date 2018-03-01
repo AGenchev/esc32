@@ -2,8 +2,9 @@
 /*
  * File:        sscanf.c
  * Purpose:     The standard C library routine sscanf()
+ * Original Author: ?
  * bugs: yes,   many :-)
-   Preliminary Floating point support added by Angel Genchev.
+ * Preliminary Floating point support added by Angel Genchev.
  */
 
 #include "atof.h"
@@ -56,7 +57,7 @@ int sscanf(const char *str, const char *format, ...)
 enum flags
 {
 	FL_SPLAT = 0x01, /* Drop the value, do not assign */
-	FL_INV = 0x02, /* Character-set with inverse */
+	FL_INV   = 0x02, /* Character-set with inverse */
 	FL_WIDTH = 0x04, /* Field width specified */
 	FL_MINUS = 0x08, /* Negative number */
 };
@@ -139,7 +140,7 @@ int vsscanf(const char *buffer, const char *format, va_list ap)
 	char * fbPtr;
 	uint32_t fbDigits;
     #endif
-	while ((ch = *p++) && !bail) // TODO fix buffer overflow
+	while ((ch = *p++) && !bail) // TODO fix possible buffer overflow
 	{
 		switch (state)
 		{
