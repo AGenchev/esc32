@@ -1,4 +1,4 @@
-# code from esc32, reworked in my "gelemodxx" branches. Basically I've created 'ESC32 on Bluepill' hardware.
+# code from esc32, reworked in my "gelemodxx" branches. Basically I've created 'ESC32 on Bluepill' hardware. which compiles with GCC for ARM (arm-none-eabi-gcc)
 Hardware is included. The main / trunk branch of Bill Nesbitt, I will leave unmodified !!!
 E.t. no pull request will be made, because I have changed too many things and don't intend to modify the original project.
 Hardware: https://github.com/AGenchev/esc32/tree/gelemod02/hardware
