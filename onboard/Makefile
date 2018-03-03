@@ -79,7 +79,7 @@ DEFINES += -DOS_USE_TRACE_SEMIHOSTING_DEBUG -DTRACE
 OUT_DIR = build
 LIBRARY_DIRS = -L src/lib
 
-INCLUDE_DIRS =  src  src/$(FOLDER_NAME) /opt/gcc-arm-none-eabi-5_4-2016q3/arm-none-eabi/include
+INCLUDE_DIRS =  src  src/$(FOLDER_NAME) 
 INCLUDE_DIRS += src/common  src/common/stdlib src/lib/STM32F10x_StdPeriph_Driver 
 INCLUDE_DIRS += src/lib/STM32F10x_StdPeriph_Driver/inc  src/lib/CMSIS_CM3
 INCLUDE_DIRS += src/lib/Baselibc/include  
@@ -96,10 +96,7 @@ INCLUDE_DIRS += /opt/gcc-arm-none-eabi-5_4-2016q3/arm-none-eabi/include /opt/gcc
 SRC_DIRS =  src  src/$(FOLDER_NAME) src/common src/common/stdlib
 # ../cmsis ../cmsis/$(FOLDER_NAME)
 # app source directories (remove comment and add more files)
-SRC_DIRS += src/lib/fixed32  src/RF  src/RF_FEC  src/RF_FEC/ReedSolomon  src/Peripheral_IO  src/USB
-SRC_DIRS += src/semihosting
-# USB HID Keyboard src:
-SRC_DIRS +=  src/lib/STM32_USB-FS-Device_Lib
+SRC_DIRS += src/Peripheral_IO  
 # ARM DSP Lib (not official directory strruct)
 #SRC_DIRS += src/lib/CMSIS_CM3/DSP_Lib src/lib/CMSIS_CM3/DSP_Lib/ControllerFunctions
 #DEFINES += -DARM_MATH_CM3
@@ -110,14 +107,14 @@ FWLIB += src/lib/STM32F10x_StdPeriph_Driver/libstm32fw.a
 #
 LIBRARY_DIRS += -L src/lib/STM32F10x_StdPeriph_Driver\
 # -L src/lib/STM32_USB-FS-Device_Driver\
- -L src/lib/Baselibc
+# -L src/lib/Baselibc
 # [OPTIONAL] Uncomment following to enable peripheral drivers (instead of direct register access)
 
 # [OPTIONAL] Uncomment to use the USB library
 # USBLIB = src/lib/STM32_USB-FS-Device_Driver/libstm32usb.a
 # .a library folders go here:
-LIBRARY_DIRS += -L src/lib/STM32_USB-FS-Device_Driver
-LIBRARY_DIRS += -L src/lib/fixed32/bin/cm3 
+#LIBRARY_DIRS += -L src/lib/STM32_USB-FS-Device_Driver
+#LIBRARY_DIRS += -L src/lib/fixed32/bin/cm3 
 
 
 
