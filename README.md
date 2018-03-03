@@ -1,4 +1,4 @@
-#BLDC Electronic Speed Controller (ESC)  
+<h1>BLDC Electronic Speed Controller (ESC)</h1>  
 <h2> Code from esc32, reworked in my "gelemodxx" branches. Basically I've created 'ESC32 on Bluepill' hardware. which compiles with GCC for ARM (arm-none-eabi-gcc)</h2>
 Hardware is included. The main / trunk branch of Bill Nesbitt, I will leave unmodified !!!
 E.t. no pull request will be made, because I have changed too many things and don't intend to modify the original project.
