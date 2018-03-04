@@ -1,4 +1,4 @@
-# code taken from esc32, heavily reworked
+# code taken from esc32, reworked to compile with GCC/freeware toolchain
 
 I modified this and reformed the project... The goal - to compile with FOSS tools completely and to contain all source.
 I put in a PCB hardware design to test it.
